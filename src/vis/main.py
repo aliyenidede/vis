@@ -5,17 +5,17 @@ import time
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 
-from config import Config
-from db import (
+from .config import Config
+from .db import (
     init_db, close_pool, log_run, get_unsent_reports,
     mark_telegram_sent, expire_old_retries, upsert_video,
 )
-from youtube import get_new_videos
-from transcript import get_transcript
-from summarize import summarize_transcript
-from report import generate_report
-from pdf import markdown_to_pdf
-from telegram import send_pdf, send_error_message
+from .youtube import get_new_videos
+from .transcript import get_transcript
+from .summarize import summarize_transcript
+from .report import generate_report
+from .pdf import markdown_to_pdf
+from .telegram import send_pdf, send_error_message
 
 logger = logging.getLogger("vis")
 

@@ -1,7 +1,7 @@
 import os
 import tempfile
 import pytest
-from transcript import _truncate, _parse_vtt
+from vis.transcript import _truncate, _parse_vtt
 
 
 def test_truncate_short():

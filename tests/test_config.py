@@ -1,6 +1,6 @@
 import os
 import pytest
-from config import Config, _mask
+from vis.config import Config, _mask
 
 
 def test_mask_short_value():

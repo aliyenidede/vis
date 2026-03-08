@@ -1,5 +1,5 @@
 import pytest
-from summarize import _parse_llm_response
+from vis.summarize import _parse_llm_response
 
 
 def test_parse_valid_json():

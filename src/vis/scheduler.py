@@ -3,7 +3,7 @@ import logging
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from main import run
+from .main import run
 
 logger = logging.getLogger(__name__)
 

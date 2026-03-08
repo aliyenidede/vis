@@ -1,7 +1,7 @@
 import os
 import tempfile
 import pytest
-from pdf import markdown_to_pdf
+from vis.pdf import markdown_to_pdf
 
 
 SAMPLE_MD = """# Daily Video Insight Report

@@ -1,6 +1,6 @@
 import os
 import pytest
-from db import (
+from vis.db import (
     init_db, close_pool, get_processed_ids, get_retryable_videos,
     upsert_video, log_run, get_unsent_reports, mark_telegram_sent,
     expire_old_retries,

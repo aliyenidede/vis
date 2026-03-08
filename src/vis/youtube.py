@@ -3,7 +3,7 @@ import logging
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from db import get_processed_ids, get_retryable_videos
+from .db import get_processed_ids, get_retryable_videos
 
 logger = logging.getLogger(__name__)
 

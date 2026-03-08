@@ -7,16 +7,18 @@ Monitors a YouTube playlist, fetches transcripts, summarizes them via LLM (OpenR
 ## Architecture
 
 ```
-config.py   → Load .env, validate, expose Config dataclass
-db.py       → PostgreSQL pool + schema + queries (psycopg2)
-youtube.py  → Playlist fetch (YouTube Data API v3)
-transcript.py → Dual extraction: youtube-transcript-api + yt-dlp fallback
-summarize.py  → LLM summarization via OpenRouter (JSON output)
-report.py   → Markdown report generation
-pdf.py      → PDF conversion with fpdf2
-telegram.py → Send PDF via Telegram Bot API
-main.py     → Pipeline orchestrator
-scheduler.py → Optional APScheduler scheduling
+src/vis/
+  __init__.py    → Package marker
+  config.py      → Load .env, validate, expose Config dataclass
+  db.py          → PostgreSQL pool + schema + queries (psycopg2)
+  youtube.py     → Playlist fetch (YouTube Data API v3)
+  transcript.py  → Dual extraction: youtube-transcript-api + yt-dlp fallback
+  summarize.py   → LLM summarization via OpenRouter (JSON output)
+  report.py      → Markdown report generation
+  pdf.py         → PDF conversion with fpdf2
+  telegram.py    → Send PDF via Telegram Bot API
+  main.py        → Pipeline orchestrator
+  scheduler.py   → Optional APScheduler scheduling
 ```
 
 ## Key Technical Rules
@@ -32,7 +34,7 @@ scheduler.py → Optional APScheduler scheduling
 
 ```bash
 # Run pipeline
-python main.py
+python -m vis.main
 
 # Run tests (skip DB tests without PostgreSQL)
 pytest tests/ -v -k "not test_db"

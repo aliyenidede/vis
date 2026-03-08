@@ -1,7 +1,7 @@
 import os
 import tempfile
 import pytest
-from report import generate_report
+from vis.report import generate_report
 
 
 def _make_video(title="Test Video", channel="Test Channel", summary="Summary text",
