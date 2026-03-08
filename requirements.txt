@@ -1,0 +1,9 @@
+google-api-python-client
+youtube-transcript-api
+yt-dlp
+requests
+python-dotenv
+fpdf2
+psycopg2-binary
+apscheduler
+pytest
