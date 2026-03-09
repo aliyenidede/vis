@@ -2,6 +2,7 @@ import logging
 import re
 import tempfile
 
+import requests
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import (
     TranscriptsDisabled,
@@ -14,16 +15,27 @@ logger = logging.getLogger(__name__)
 
 MAX_TRANSCRIPT_LENGTH = 50000
 
+PREFERRED_LANGUAGES = [["en"], ["en-US", "en-GB"], ["tr"]]
 
-def get_transcript(video_id: str) -> tuple:
+
+def get_transcript(video_id: str, supadata_api_key: str = "") -> tuple:
+    # Layer 1: youtube-transcript-api (fastest, free)
     text, lang = _try_youtube_transcript_api(video_id)
     if text:
         return text, lang
 
-    logger.info("Primary method failed for %s, trying yt-dlp fallback", video_id)
+    # Layer 2: yt-dlp subtitle extraction (free)
+    logger.info("Layer 1 failed for %s, trying yt-dlp", video_id)
     text, lang = _try_yt_dlp(video_id)
     if text:
         return text, lang
+
+    # Layer 3: Supadata API (100 free credits/month)
+    if supadata_api_key:
+        logger.info("Layer 2 failed for %s, trying Supadata", video_id)
+        text, lang = _try_supadata(video_id, supadata_api_key)
+        if text:
+            return text, lang
 
     return None, None
 
@@ -32,7 +44,7 @@ def _try_youtube_transcript_api(video_id: str) -> tuple:
     ytt_api = YouTubeTranscriptApi()
 
     # Try specific languages in order
-    for languages in [["en"], ["en-US", "en-GB"], ["tr"]]:
+    for languages in PREFERRED_LANGUAGES:
         try:
             transcript = ytt_api.fetch(video_id, languages=languages)
             text = " ".join(snippet.text for snippet in transcript.snippets)
@@ -45,7 +57,7 @@ def _try_youtube_transcript_api(video_id: str) -> tuple:
             logger.warning("Video unavailable: %s", video_id)
             return None, None
         except RequestBlocked:
-            logger.warning("Request blocked for %s, will try yt-dlp", video_id)
+            logger.warning("Request blocked for %s, will try next layer", video_id)
             return None, None
         except Exception as e:
             logger.debug("youtube-transcript-api error for %s with %s: %s", video_id, languages, e)
@@ -112,7 +124,6 @@ def _try_yt_dlp(video_id: str) -> tuple:
                     subs = info.get(sub_source, {})
                     for lang in ["en", "en-US", "en-GB", "tr"]:
                         if lang in subs:
-                            # Download just this subtitle
                             ydl_opts_dl = {
                                 "skip_download": True,
                                 "writesubtitles": sub_source == "subtitles",
@@ -126,7 +137,6 @@ def _try_yt_dlp(video_id: str) -> tuple:
                             with yt_dlp.YoutubeDL(ydl_opts_dl) as ydl2:
                                 ydl2.download([url])
 
-                            # Find and parse the subtitle file
                             import glob
                             vtt_files = glob.glob(f"{tmpdir}/*.vtt")
                             if vtt_files:
@@ -163,6 +173,34 @@ def _try_yt_dlp(video_id: str) -> tuple:
 
         except Exception as e:
             logger.warning("yt-dlp failed for %s: %s", video_id, e)
+
+    return None, None
+
+
+def _try_supadata(video_id: str, api_key: str) -> tuple:
+    url = f"https://api.supadata.ai/v1/youtube/transcript?videoId={video_id}&text=true"
+    headers = {"x-api-key": api_key}
+
+    try:
+        response = requests.get(url, headers=headers, timeout=30)
+
+        if response.status_code == 200:
+            data = response.json()
+            text = data.get("content", "")
+            lang = data.get("lang", "unknown")
+            if text:
+                logger.info("Got transcript via Supadata for %s (lang=%s)", video_id, lang)
+                return _truncate(text), f"supadata-{lang}"
+
+        if response.status_code == 429:
+            logger.warning("Supadata rate limited for %s", video_id)
+        elif response.status_code == 402:
+            logger.warning("Supadata quota exhausted")
+        else:
+            logger.warning("Supadata failed for %s: %d %s", video_id, response.status_code, response.text[:200])
+
+    except requests.RequestException as e:
+        logger.warning("Supadata request failed for %s: %s", video_id, e)
 
     return None, None
 

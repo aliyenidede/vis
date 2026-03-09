@@ -11,8 +11,8 @@ src/vis/
   __init__.py    → Package marker
   config.py      → Load .env, validate, expose Config dataclass
   db.py          → PostgreSQL pool + schema + queries (psycopg2)
-  youtube.py     → Playlist fetch (YouTube Data API v3)
-  transcript.py  → Dual extraction: youtube-transcript-api + yt-dlp fallback
+  youtube.py     → Playlist fetch via yt-dlp (no API key needed)
+  transcript.py  → 3-layer extraction: youtube-transcript-api → yt-dlp → Supadata
   summarize.py   → LLM summarization via OpenRouter (JSON output)
   report.py      → Markdown report generation
   pdf.py         → PDF conversion with fpdf2

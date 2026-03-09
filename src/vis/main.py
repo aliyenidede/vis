@@ -71,9 +71,9 @@ def run():
         # 6-7. Fetch and filter videos
         new_videos = get_new_videos(
             config.youtube_playlist_id,
-            config.youtube_api_key,
             config.max_videos,
             pool,
+            config.transcript_retry_days,
         )
 
         # 8. Check if there's work to do
@@ -89,7 +89,7 @@ def run():
             logger.info("Processing: %s (%s)", video["title"], video_id)
 
             # 9a. Fetch transcript
-            transcript_text, lang = get_transcript(video_id)
+            transcript_text, lang = get_transcript(video_id, config.supadata_api_key)
             time.sleep(2)  # Rate limiting between transcript fetches
 
             # 9b. No transcript

@@ -6,10 +6,9 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-SENSITIVE_KEYS = {"YOUTUBE_API_KEY", "OPENROUTER_API_KEY", "TELEGRAM_BOT_TOKEN", "DATABASE_URL"}
+SENSITIVE_KEYS = {"OPENROUTER_API_KEY", "TELEGRAM_BOT_TOKEN", "DATABASE_URL", "SUPADATA_API_KEY"}
 
 REQUIRED_KEYS = [
-    "YOUTUBE_API_KEY",
     "YOUTUBE_PLAYLIST_ID",
     "OPENROUTER_API_KEY",
     "TELEGRAM_BOT_TOKEN",
@@ -26,7 +25,6 @@ def _mask(value: str) -> str:
 
 @dataclass
 class Config:
-    youtube_api_key: str
     youtube_playlist_id: str
     openrouter_api_key: str
     telegram_bot_token: str
@@ -36,6 +34,7 @@ class Config:
     max_videos: int
     llm_model: str
     transcript_retry_days: int
+    supadata_api_key: str
 
     @classmethod
     def load(cls) -> "Config":
@@ -46,7 +45,6 @@ class Config:
             raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
 
         config = cls(
-            youtube_api_key=os.environ["YOUTUBE_API_KEY"],
             youtube_playlist_id=os.environ["YOUTUBE_PLAYLIST_ID"],
             openrouter_api_key=os.environ["OPENROUTER_API_KEY"],
             telegram_bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
@@ -56,6 +54,7 @@ class Config:
             max_videos=int(os.getenv("MAX_VIDEOS", "100")),
             llm_model=os.getenv("LLM_MODEL", "google/gemini-2.0-flash-001"),
             transcript_retry_days=int(os.getenv("TRANSCRIPT_RETRY_DAYS", "3")),
+            supadata_api_key=os.getenv("SUPADATA_API_KEY", ""),
         )
 
         logger.info("Configuration loaded successfully")

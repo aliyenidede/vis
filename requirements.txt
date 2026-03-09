@@ -1,4 +1,3 @@
-google-api-python-client
 youtube-transcript-api
 yt-dlp
 requests
