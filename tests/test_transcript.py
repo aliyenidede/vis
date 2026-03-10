@@ -10,9 +10,9 @@ def test_truncate_short():
 
 
 def test_truncate_long():
-    text = "a" * 60000
+    text = "a" * 600000
     result = _truncate(text)
-    assert len(result) == 50000
+    assert len(result) == 500000
 
 
 def test_parse_vtt():

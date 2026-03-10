@@ -55,7 +55,7 @@ def generate_report(
             retry_count = video.get("retry_count", 0)
 
             if status == "gave_up":
-                status_text = f"Gave up after {retry_count} retries — watch manually"
+                status_text = f"Gave up after {retry_count} retries --watch manually"
             else:
                 status_text = f"No transcript (attempt {retry_count + 1})"
 

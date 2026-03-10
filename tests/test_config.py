@@ -1,4 +1,6 @@
 import os
+from unittest.mock import patch
+
 import pytest
 from vis.config import Config, _mask
 
@@ -11,14 +13,16 @@ def test_mask_normal_value():
     assert _mask("my-secret-key-1234") == "***1234"
 
 
-def test_load_missing_key(monkeypatch):
+@patch("vis.config.load_dotenv")
+def test_load_missing_key(mock_dotenv, monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.delenv("YOUTUBE_PLAYLIST_ID", raising=False)
     with pytest.raises(ValueError, match="YOUTUBE_PLAYLIST_ID"):
         Config.load()
 
 
-def test_load_defaults(monkeypatch):
+@patch("vis.config.load_dotenv")
+def test_load_defaults(mock_dotenv, monkeypatch):
     env = {
         "YOUTUBE_PLAYLIST_ID": "pl-id",
         "OPENROUTER_API_KEY": "or-key",

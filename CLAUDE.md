@@ -2,7 +2,7 @@
 
 ## What It Does
 
-Monitors a YouTube playlist, fetches transcripts, summarizes them via LLM (OpenRouter), generates PDF reports, and delivers via Telegram. Runs daily via Docker/Coolify cron.
+Monitors a YouTube playlist, fetches transcripts, summarizes them via LLM (OpenRouter), generates PDF reports, and delivers via Telegram. Runs as a long-lived service: Telegram bot for commands + APScheduler for daily cron.
 
 ## Architecture
 
@@ -15,10 +15,11 @@ src/vis/
   transcript.py  → 3-layer extraction: youtube-transcript-api → yt-dlp → Supadata
   summarize.py   → LLM summarization via OpenRouter (JSON output)
   report.py      → Markdown report generation
-  pdf.py         → PDF conversion with fpdf2
+  pdf.py         → PDF conversion with fpdf2 (cover page + TOC + content)
   telegram.py    → Send PDF via Telegram Bot API
-  main.py        → Pipeline orchestrator
-  scheduler.py   → Optional APScheduler scheduling
+  bot.py         → Telegram bot commands (/status, /check, /run, /stats, /pending)
+  main.py        → Pipeline orchestrator + cleanup
+  scheduler.py   → APScheduler + bot polling (long-lived process)
 ```
 
 ## Key Technical Rules
@@ -29,12 +30,26 @@ src/vis/
 - **Transcripts**: youtube-transcript-api v1.2+ uses instance methods: `YouTubeTranscriptApi().fetch()` not the old static `get_transcript()`
 - **Sensitive data**: Never log API keys, tokens, DATABASE_URL passwords — use `_mask()` from config
 - **Rate limiting**: 2s between transcript fetches, 1s between LLM calls
+- **Supadata API**: 100 credits/month, auto-checked before use (95 credit threshold)
+- **Report cleanup**: Old .md/.pdf files auto-deleted after 7 days
+
+## Telegram Bot Commands
+
+- `/start` — Welcome message
+- `/status` — Last run info, Supadata usage
+- `/check` — List new/pending videos WITHOUT consuming API credits
+- `/stats` — Detailed statistics (videos by status, API usage, run count)
+- `/run` — Trigger pipeline run manually
+- `/pending` — List videos waiting for transcript retry
 
 ## Commands
 
 ```bash
-# Run pipeline
+# Run pipeline once
 python -m vis.main
+
+# Run as service (scheduler + bot)
+python -m vis.scheduler
 
 # Run tests (skip DB tests without PostgreSQL)
 pytest tests/ -v -k "not test_db"
@@ -48,6 +63,7 @@ docker compose up --build
 
 ## Deployment
 
-- Docker Compose: PostgreSQL + app
+- Docker Compose: PostgreSQL + app (scheduler mode, long-lived)
 - Coolify: connect GitHub repo, set env vars in UI
-- Cron: `0 5 * * *` (05:00 UTC = 08:00 Istanbul)
+- Daily pipeline: 08:00 Istanbul time via APScheduler
+- Telegram bot: always listening for commands

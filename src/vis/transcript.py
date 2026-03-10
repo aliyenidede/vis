@@ -13,12 +13,12 @@ from youtube_transcript_api._errors import (
 
 logger = logging.getLogger(__name__)
 
-MAX_TRANSCRIPT_LENGTH = 50000
+MAX_TRANSCRIPT_LENGTH = 500000  # ~5 hours of speech
 
 PREFERRED_LANGUAGES = [["en"], ["en-US", "en-GB"], ["tr"]]
 
 
-def get_transcript(video_id: str, supadata_api_key: str = "") -> tuple:
+def get_transcript(video_id: str, supadata_api_key: str = "", db_pool=None) -> tuple:
     # Layer 1: youtube-transcript-api (fastest, free)
     text, lang = _try_youtube_transcript_api(video_id)
     if text:
@@ -32,8 +32,22 @@ def get_transcript(video_id: str, supadata_api_key: str = "") -> tuple:
 
     # Layer 3: Supadata API (100 free credits/month)
     if supadata_api_key:
+        # Check monthly usage before consuming a credit
+        if db_pool:
+            from .db import get_api_usage_this_month
+            usage = get_api_usage_this_month(db_pool, "supadata")
+            if usage["total"] >= 95:  # Leave 5 credits buffer
+                logger.warning("Supadata monthly limit nearly reached (%d/100), skipping", usage["total"])
+                return None, None
+
         logger.info("Layer 2 failed for %s, trying Supadata", video_id)
         text, lang = _try_supadata(video_id, supadata_api_key)
+
+        # Track API usage
+        if db_pool:
+            from .db import log_api_usage
+            log_api_usage(db_pool, "supadata", video_id, success=bool(text))
+
         if text:
             return text, lang
 

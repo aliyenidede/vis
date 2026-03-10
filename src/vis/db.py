@@ -36,9 +36,19 @@ CREATE TABLE IF NOT EXISTS run_log (
     error_message      TEXT
 );
 
+CREATE TABLE IF NOT EXISTS api_usage (
+    id                 SERIAL PRIMARY KEY,
+    api_name           TEXT NOT NULL,
+    video_id           TEXT,
+    used_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    success            BOOLEAN DEFAULT FALSE
+);
+
 CREATE INDEX IF NOT EXISTS idx_pv_status ON processed_videos(status);
 CREATE INDEX IF NOT EXISTS idx_pv_first_seen ON processed_videos(first_seen_at);
 CREATE INDEX IF NOT EXISTS idx_rl_run_at ON run_log(run_at);
+CREATE INDEX IF NOT EXISTS idx_api_usage_name ON api_usage(api_name);
+CREATE INDEX IF NOT EXISTS idx_api_usage_used_at ON api_usage(used_at);
 """
 
 
@@ -204,6 +214,100 @@ def expire_old_retries(pool: pg_pool.SimpleConnectionPool, max_retry_days: int) 
     except Exception:
         conn.rollback()
         raise
+    finally:
+        pool.putconn(conn)
+
+
+def log_api_usage(pool: pg_pool.SimpleConnectionPool, api_name: str, video_id: str, success: bool) -> None:
+    conn = pool.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO api_usage (api_name, video_id, success) VALUES (%s, %s, %s)",
+                (api_name, video_id, success),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+
+
+def get_api_usage_this_month(pool: pg_pool.SimpleConnectionPool, api_name: str) -> dict:
+    conn = pool.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT COUNT(*) as total,
+                          COUNT(*) FILTER (WHERE success) as successful
+                   FROM api_usage
+                   WHERE api_name = %s
+                     AND used_at >= date_trunc('month', NOW())""",
+                (api_name,),
+            )
+            row = cur.fetchone()
+            return {"total": row[0], "successful": row[1]}
+    finally:
+        pool.putconn(conn)
+
+
+def get_pipeline_stats(pool: pg_pool.SimpleConnectionPool) -> dict:
+    conn = pool.getconn()
+    try:
+        with conn.cursor() as cur:
+            # Video counts by status
+            cur.execute(
+                """SELECT status, COUNT(*) FROM processed_videos GROUP BY status"""
+            )
+            status_counts = dict(cur.fetchall())
+
+            # Last successful run
+            cur.execute(
+                """SELECT run_at, videos_processed, telegram_sent
+                   FROM run_log WHERE success = TRUE
+                   ORDER BY run_at DESC LIMIT 1"""
+            )
+            last_run = cur.fetchone()
+
+            # Total runs
+            cur.execute("SELECT COUNT(*) FROM run_log")
+            total_runs = cur.fetchone()[0]
+
+            # Supadata usage this month
+            cur.execute(
+                """SELECT COUNT(*) FROM api_usage
+                   WHERE api_name = 'supadata'
+                     AND used_at >= date_trunc('month', NOW())"""
+            )
+            supadata_this_month = cur.fetchone()[0]
+
+            return {
+                "status_counts": status_counts,
+                "last_run": {
+                    "run_at": last_run[0].isoformat() if last_run else None,
+                    "videos_processed": last_run[1] if last_run else 0,
+                    "telegram_sent": last_run[2] if last_run else False,
+                } if last_run else None,
+                "total_runs": total_runs,
+                "supadata_this_month": supadata_this_month,
+            }
+    finally:
+        pool.putconn(conn)
+
+
+def get_pending_videos(pool: pg_pool.SimpleConnectionPool) -> list:
+    conn = pool.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT video_id, title, channel_title, status, retry_count, first_seen_at
+                   FROM processed_videos
+                   WHERE status IN ('no_transcript')
+                   ORDER BY first_seen_at DESC"""
+            )
+            cols = [desc[0] for desc in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]
     finally:
         pool.putconn(conn)
 

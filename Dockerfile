@@ -10,4 +10,4 @@ RUN pip install --no-cache-dir -e .
 
 RUN mkdir -p /app/output
 
-CMD ["python", "-m", "vis.main"]
+CMD ["python", "-m", "vis.scheduler"]
