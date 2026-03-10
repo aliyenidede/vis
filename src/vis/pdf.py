@@ -1,360 +1,694 @@
+"""Generate dark-theme HTML report and convert to PDF via Playwright (Chromium)."""
 import logging
-import re
+import os
 
-from fpdf import FPDF
+from playwright.sync_api import sync_playwright
 
 logger = logging.getLogger(__name__)
 
-# Unicode chars that Helvetica (latin-1) can't render
-_UNICODE_REPLACEMENTS = {
-    "\u2014": "--",   # em-dash
-    "\u2013": "-",    # en-dash
-    "\u2018": "'",    # left single quote
-    "\u2019": "'",    # right single quote
-    "\u201c": '"',    # left double quote
-    "\u201d": '"',    # right double quote
-    "\u2026": "...",  # ellipsis
-    "\u2022": "-",    # bullet
-    "\u00a0": " ",    # non-breaking space
-}
 
+def generate_pdf(
+    videos: list,
+    failed_videos: list,
+    pdf_path: str,
+    output_dir: str | None = None,
+) -> str:
+    """Generate a dark-theme PDF report from structured video data.
 
-def _sanitize(text: str) -> str:
-    """Replace Unicode characters unsupported by Helvetica/latin-1."""
-    for char, replacement in _UNICODE_REPLACEMENTS.items():
-        text = text.replace(char, replacement)
-    # Fallback: strip remaining non-latin-1 chars
-    return text.encode("latin-1", errors="replace").decode("latin-1")
+    Args:
+        videos: List of processed video dicts (with summary, key_ideas, etc.)
+        failed_videos: List of failed video dicts
+        pdf_path: Output path for the PDF file
+        output_dir: Directory for intermediate HTML file (defaults to pdf_path dir)
 
+    Returns:
+        The pdf_path on success.
+    """
+    from datetime import datetime, timezone
 
-class ReportPDF(FPDF):
-    """Custom PDF with cover page, table of contents, and proper formatting."""
+    now = datetime.now(timezone.utc)
+    date_str = now.strftime("%Y-%m-%d %H:%M:%S")
 
-    def __init__(self):
-        super().__init__()
-        self._toc_entries = []
+    html = _generate_html(
+        videos=videos,
+        failed_videos=failed_videos,
+        date_str=date_str,
+        processed=len(videos),
+        failed=len(failed_videos),
+    )
 
-    def header(self):
-        if self.page_no() <= 2:
-            return
-        self.set_font("Helvetica", "I", 8)
-        self.set_text_color(128, 128, 128)
-        self.cell(0, 8, "VIS Daily Report", align="R")
-        self.ln(10)
+    # Save intermediate HTML (useful for debugging)
+    if output_dir is None:
+        output_dir = os.path.dirname(pdf_path)
+    os.makedirs(output_dir, exist_ok=True)
 
-    def footer(self):
-        if self.page_no() <= 1:
-            return
-        self.set_y(-15)
-        self.set_font("Helvetica", "I", 8)
-        self.set_text_color(128, 128, 128)
-        self.cell(0, 10, f"Page {self.page_no() - 1}", align="C")
+    html_path = pdf_path.replace(".pdf", ".html")
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(html)
+    logger.info("HTML report saved: %s", html_path)
 
-    def add_toc_entry(self, title: str, level: int = 1):
-        self._toc_entries.append((title, self.page_no(), level))
+    # Convert HTML to PDF via Playwright (Chromium)
+    html_abs = os.path.abspath(html_path)
+    pdf_abs = os.path.abspath(pdf_path)
 
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        page.goto(f"file:///{html_abs.replace(os.sep, '/')}")
+        page.pdf(
+            path=pdf_abs,
+            print_background=True,
+            prefer_css_page_size=True,
+        )
+        browser.close()
 
-def markdown_to_pdf(md_path: str, pdf_path: str) -> str:
-    with open(md_path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    # Sanitize all content for latin-1 compatibility (Helvetica font)
-    content = _sanitize(content)
-    lines = content.split("\n")
-
-    meta = _parse_metadata(lines)
-    videos = _parse_video_sections(lines)
-
-    pdf = ReportPDF()
-    pdf.alias_nb_pages()
-    pdf.set_auto_page_break(auto=True, margin=20)
-    pdf.set_margins(20, 20, 20)
-
-    # --- Cover Page ---
-    _render_cover_page(pdf, meta)
-
-    # --- Table of Contents ---
-    pdf.add_page()
-    _render_toc(pdf, videos)
-
-    # --- Content Pages ---
-    # Skip lines until first H2 (header metadata is already on cover page)
-    content_started = False
-
-    for line in lines:
-        stripped = line.strip()
-
-        # Skip everything before the first H2
-        if not content_started:
-            if stripped.startswith("## "):
-                content_started = True
-            else:
-                continue
-
-        if not stripped:
-            pdf.ln(4)
-            continue
-
-        # Horizontal rule
-        if stripped == "---":
-            pdf.ln(3)
-            y = pdf.get_y()
-            pdf.set_draw_color(200, 200, 200)
-            pdf.line(20, y, pdf.w - 20, y)
-            pdf.ln(6)
-            continue
-
-        # H1 — skip
-        if stripped.startswith("# ") and not stripped.startswith("## "):
-            continue
-
-        # H2 — video title or section header
-        if stripped.startswith("## "):
-            text = stripped[3:]
-            # New page for each numbered video section
-            if re.match(r"^\d+\.", text):
-                pdf.add_page()
-                pdf.add_toc_entry(text, level=1)
-            else:
-                # Non-numbered H2 (e.g. "Videos Without Transcript")
-                pdf.ln(6)
-            pdf.set_font("Helvetica", "B", 14)
-            pdf.set_text_color(0, 51, 102)
-            pdf.multi_cell(0, 8, text)
-            pdf.ln(3)
-            continue
-
-        # H3
-        if stripped.startswith("### "):
-            text = stripped[4:]
-            pdf.set_font("Helvetica", "B", 12)
-            pdf.set_text_color(51, 51, 51)
-            pdf.multi_cell(0, 7, text)
-            pdf.ln(2)
-            continue
-
-        # Metadata lines (**Key:** Value)
-        if stripped.startswith("**") and ":**" in stripped:
-            _render_metadata_line(pdf, stripped)
-            continue
-
-        # Table row
-        if stripped.startswith("|"):
-            _render_table_row(pdf, stripped)
-            continue
-
-        # Bullet point
-        if stripped.startswith("- "):
-            text = stripped[2:]
-            pdf.set_font("Helvetica", "", 10)
-            pdf.set_text_color(0, 0, 0)
-            x = pdf.get_x()
-            pdf.set_x(x + 8)
-            pdf.cell(5, 6, "-")
-            pdf.set_x(x + 14)
-            pdf.multi_cell(pdf.w - 20 - x - 14, 6, text)
-            pdf.ln(1)
-            continue
-
-        # Regular paragraph
-        pdf.set_font("Helvetica", "", 10)
-        pdf.set_text_color(0, 0, 0)
-        pdf.multi_cell(0, 6, stripped)
-        pdf.ln(2)
-
-    pdf.output(pdf_path)
-    logger.info("PDF generated: %s (%d pages)", pdf_path, pdf.page_no())
+    logger.info("PDF generated: %s", pdf_abs)
     return pdf_path
 
 
-def _parse_metadata(lines: list) -> dict:
-    meta = {"date": "", "processed": "0", "failed": "0"}
-    for line in lines[:10]:
-        stripped = line.strip()
-        if stripped.startswith("**Date:**"):
-            meta["date"] = stripped.replace("**Date:**", "").strip()
-        elif stripped.startswith("**Videos processed:**"):
-            meta["processed"] = stripped.replace("**Videos processed:**", "").strip()
-        elif stripped.startswith("**Videos failed:**"):
-            meta["failed"] = stripped.replace("**Videos failed:**", "").strip()
-    return meta
+def _generate_html(videos, failed_videos, date_str, processed, failed):
+    """Generate the full dark-theme HTML report."""
 
+    video_sections = ""
+    toc_items = ""
 
-def _parse_video_sections(lines: list) -> list:
-    videos = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("## ") and re.match(r"^## \d+\.", stripped):
-            title = stripped[3:]
-            videos.append(title)
-    return videos
+    for i, v in enumerate(videos, 1):
+        toc_items += f'<div class="toc-item"><span class="toc-num">{i:02d}</span><span class="toc-title">{v["title"]}</span></div>\n'
 
+        # Infographic
+        infographic_html = ""
+        info = v.get("infographic", {})
+        if info and info.get("topic"):
+            stats_html = ""
+            for stat in info.get("key_stats", []):
+                stats_html += f'<li>{stat}</li>'
 
-def _render_cover_page(pdf: FPDF, meta: dict):
-    pdf.add_page()
-    pdf.ln(50)
+            terms_html = ""
+            for term in info.get("key_terms", []):
+                terms_html += f'<li>{term}</li>'
 
-    pdf.set_font("Helvetica", "B", 28)
-    pdf.set_text_color(0, 51, 102)
-    pdf.cell(0, 15, "VIS Daily Report", align="C")
-    pdf.ln(20)
+            bottom = info.get("bottom_line", "")
 
-    # Decorative line
-    y = pdf.get_y()
-    pdf.set_draw_color(0, 51, 102)
-    pdf.set_line_width(0.8)
-    pdf.line(50, y, pdf.w - 50, y)
-    pdf.set_line_width(0.2)
-    pdf.ln(15)
+            infographic_html = f'''
+            <div class="infographic">
+                <div class="infographic-header">INFOGRAPHIC</div>
+                <div class="infographic-topic">{info["topic"]}</div>
+                <div class="infographic-grid">
+                    <div class="infographic-col">
+                        <div class="infographic-label">Key Stats</div>
+                        <ul>{stats_html}</ul>
+                    </div>
+                    <div class="infographic-col">
+                        <div class="infographic-label">Key Terms</div>
+                        <ul>{terms_html}</ul>
+                    </div>
+                </div>
+                <div class="infographic-bottom">{bottom}</div>
+            </div>'''
 
-    # Date
-    pdf.set_font("Helvetica", "", 14)
-    pdf.set_text_color(80, 80, 80)
-    pdf.cell(0, 10, meta.get("date", ""), align="C")
-    pdf.ln(25)
+        # Key ideas
+        ideas_html = ""
+        for idea in v.get("key_ideas", []):
+            ideas_html += f'<li><span class="bullet-icon">&rsaquo;</span> {idea}</li>'
 
-    # Stats box
-    box_x = pdf.w / 2 - 40
-    box_y = pdf.get_y()
-    pdf.set_fill_color(240, 245, 250)
-    pdf.rect(box_x, box_y, 80, 35, "F")
+        # TL;DR
+        tldr_html = ""
+        if v.get("tldr"):
+            tldr_html = f'''
+            <div class="tldr-box">
+                <div class="tldr-label">TL;DR</div>
+                <p>{v["tldr"]}</p>
+            </div>'''
 
-    pdf.set_xy(box_x, box_y + 5)
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.set_text_color(0, 0, 0)
-    pdf.cell(80, 8, f"Videos Processed: {meta.get('processed', '0')}", align="C")
-    pdf.set_xy(box_x, box_y + 18)
-    pdf.cell(80, 8, f"Videos Failed: {meta.get('failed', '0')}", align="C")
+        # Summary paragraphs
+        summary_paras = ""
+        for para in v.get("summary", "").split("\n\n"):
+            if para.strip():
+                summary_paras += f"<p>{para.strip()}</p>"
+        if not summary_paras:
+            summary_paras = f"<p>{v.get('summary', 'No summary available.')}</p>"
 
-    pdf.ln(50)
+        # YouTube link
+        video_id = v.get("video_id", "")
+        yt_link = ""
+        if video_id:
+            yt_link = f'<a class="meta-tag video-link" href="https://www.youtube.com/watch?v={video_id}" target="_blank"><span class="meta-icon">&#128279;</span> YouTube</a>'
 
-    pdf.set_font("Helvetica", "I", 9)
-    pdf.set_text_color(128, 128, 128)
-    pdf.cell(0, 10, "Generated by VIS (Video Insight System)", align="C")
+        video_sections += f'''
+        <div class="video-page">
+            <div class="video-header">
+                <div class="video-num">{i:02d}</div>
+                <h2>{v["title"]}</h2>
+            </div>
+            <div class="video-meta">
+                <span class="meta-tag"><span class="meta-icon">&#9654;</span> {v.get("channel_title", "Unknown")}</span>
+                <span class="meta-tag"><span class="meta-icon">&#9670;</span> {v.get("category", "Other")}</span>
+                {yt_link}
+            </div>
 
+            {tldr_html}
 
-def _render_toc(pdf: FPDF, videos: list):
-    pdf.set_font("Helvetica", "B", 18)
-    pdf.set_text_color(0, 51, 102)
-    pdf.cell(0, 12, "Table of Contents")
-    pdf.ln(10)
+            <div class="section">
+                <h3>Summary</h3>
+                {summary_paras}
+            </div>
 
-    pdf.set_draw_color(0, 51, 102)
-    pdf.set_line_width(0.5)
-    pdf.line(20, pdf.get_y(), pdf.w - 20, pdf.get_y())
-    pdf.set_line_width(0.2)
-    pdf.ln(8)
+            <div class="section">
+                <h3>Key Ideas & Takeaways</h3>
+                <ul class="key-ideas">{ideas_html}</ul>
+            </div>
 
-    pdf.set_font("Helvetica", "", 11)
-    pdf.set_text_color(0, 0, 0)
+            {infographic_html}
+        </div>
+        '''
 
-    for i, title in enumerate(videos, 1):
-        if pdf.get_y() > pdf.h - 30:
-            pdf.add_page()
+    # Failed videos section
+    failed_section = ""
+    if failed_videos:
+        failed_rows = ""
+        for i, fv in enumerate(failed_videos, 1):
+            status = fv.get("status", "no_transcript")
+            retry_count = fv.get("retry_count", 0)
+            if status == "gave_up":
+                status_text = f"Gave up after {retry_count} retries"
+            else:
+                status_text = f"No transcript (attempt {retry_count + 1})"
 
-        clean_title = re.sub(r"^\d+\.\s*", "", title)
-        entry = f"{i}. {clean_title}"
-        pdf.multi_cell(0, 7, entry)
-        pdf.ln(3)
+            video_id = fv.get("video_id", "")
+            link_html = f'<a href="https://www.youtube.com/watch?v={video_id}" class="video-link">Link</a>' if video_id else ""
 
-    if not videos:
-        pdf.set_font("Helvetica", "I", 10)
-        pdf.set_text_color(128, 128, 128)
-        pdf.cell(0, 8, "No videos processed in this run.")
+            failed_rows += f'''
+            <tr>
+                <td>{i}</td>
+                <td>{fv.get("title", "Unknown")}</td>
+                <td>{fv.get("channel_title", "Unknown")}</td>
+                <td>{link_html}</td>
+                <td>{status_text}</td>
+            </tr>'''
 
+        failed_section = f'''
+        <div class="failed-section">
+            <h2>Videos Without Transcript</h2>
+            <table class="failed-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Title</th>
+                        <th>Channel</th>
+                        <th>Link</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>{failed_rows}</tbody>
+            </table>
+        </div>'''
 
-def _render_metadata_line(pdf: FPDF, text: str):
-    match = re.match(r"\*\*(.*?)\*\*\s*(.*)", text)
-    if not match:
-        pdf.set_font("Helvetica", "", 10)
-        pdf.set_text_color(0, 0, 0)
-        pdf.multi_cell(0, 6, text)
-        return
+    html = f'''<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    @page {{
+        size: 210mm 15000mm;
+        margin: 0;
+    }}
 
-    key = match.group(1)
-    value = match.group(2)
+    * {{
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }}
 
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.set_text_color(80, 80, 80)
-    key_w = pdf.get_string_width(key) + 2
-    pdf.cell(key_w, 6, key)
+    html, body {{
+        background: #0c0f2d;
+    }}
 
-    pdf.set_font("Helvetica", "", 10)
-    pdf.set_text_color(0, 0, 0)
+    body {{
+        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        color: #e0e0e0;
+        font-size: 25pt;
+        line-height: 1.6;
+        width: 210mm;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }}
 
-    link_match = re.match(r"\[(.*?)\]\((.*?)\)", value.strip())
-    if link_match:
-        pdf.set_text_color(0, 0, 200)
-        pdf.cell(0, 6, link_match.group(1), link=link_match.group(2))
-        pdf.set_text_color(0, 0, 0)
-    else:
-        pdf.cell(0, 6, value)
+    /* ============ COVER PAGE ============ */
+    .cover {{
+        width: 210mm;
+        height: 297mm;
+        background: linear-gradient(135deg, #0a0e27 0%, #1a0a2e 40%, #0f1a3a 70%, #0a1e2e 100%);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        overflow: hidden;
+    }}
 
-    pdf.ln(6)
+    .cover::before {{
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #00d4ff, #a855f7, #ec4899, #00d4ff);
+    }}
 
+    .cover::after {{
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #ec4899, #a855f7, #00d4ff, #ec4899);
+    }}
 
-def _render_table_row(pdf: FPDF, row: str):
-    cells = [c.strip() for c in row.split("|")[1:-1]]
+    .cover-glow-1 {{
+        position: absolute;
+        width: 300px;
+        height: 300px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(0, 212, 255, 0.08) 0%, transparent 70%);
+        top: -50px;
+        right: -50px;
+    }}
 
-    if not cells:
-        return
+    .cover-glow-2 {{
+        position: absolute;
+        width: 400px;
+        height: 400px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(168, 85, 247, 0.06) 0%, transparent 70%);
+        bottom: -100px;
+        left: -100px;
+    }}
 
-    # Skip separator rows
-    if all(re.match(r"^-+$", c) for c in cells):
-        return
+    .cover-glow-3 {{
+        position: absolute;
+        width: 200px;
+        height: 200px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(236, 72, 153, 0.06) 0%, transparent 70%);
+        top: 40%;
+        left: 20%;
+    }}
 
-    # Use proportional column widths for the failed videos table
-    # Columns: #, Title, Channel, Link, Status
-    available_width = pdf.w - 40
-    col_count = len(cells)
+    .cover-content {{
+        text-align: center;
+        position: relative;
+        z-index: 1;
+    }}
 
-    if col_count == 5:
-        # Proportional: #=5%, Title=35%, Channel=20%, Link=10%, Status=30%
-        col_widths = [
-            available_width * 0.05,
-            available_width * 0.35,
-            available_width * 0.20,
-            available_width * 0.10,
-            available_width * 0.30,
-        ]
-    else:
-        col_widths = [available_width / col_count] * col_count
+    .cover-title {{
+        font-size: 90pt;
+        font-weight: 800;
+        color: #ffffff;
+        letter-spacing: 2px;
+        margin-bottom: 8px;
+    }}
 
-    # Check if we need a new page
-    if pdf.get_y() > pdf.h - 25:
-        pdf.add_page()
+    .cover-subtitle {{
+        font-size: 28pt;
+        color: #9ca3af;
+        letter-spacing: 4px;
+        text-transform: uppercase;
+        margin-bottom: 40px;
+    }}
 
-    x_start = pdf.get_x()
-    y_start = pdf.get_y()
+    .cover-line {{
+        width: 120px;
+        height: 2px;
+        background: linear-gradient(90deg, #00d4ff, #a855f7, #ec4899);
+        margin: 0 auto 40px auto;
+    }}
 
-    # Calculate row height based on longest cell content
-    pdf.set_font("Helvetica", "", 8)
-    max_lines = 1
-    for i, cell_text in enumerate(cells):
-        link_match = re.match(r"\[(.*?)\]\((.*?)\)", cell_text)
-        if link_match:
-            cell_text = link_match.group(1)
-        w = col_widths[i] if i < len(col_widths) else col_widths[-1]
-        text_w = pdf.get_string_width(cell_text)
-        lines_needed = max(1, int(text_w / (w - 2)) + 1)
-        max_lines = max(max_lines, lines_needed)
+    .cover-date {{
+        font-size: 35pt;
+        color: #e0e0e0;
+        margin-bottom: 50px;
+    }}
 
-    row_height = max(7, max_lines * 5)
+    .cover-stats {{
+        display: flex;
+        gap: 40px;
+        justify-content: center;
+    }}
 
-    pdf.set_text_color(0, 0, 0)
+    .stat-box {{
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 12px;
+        padding: 20px 30px;
+        background: rgba(15, 21, 53, 0.6);
+        text-align: center;
+        min-width: 140px;
+    }}
 
-    for i, cell_text in enumerate(cells):
-        w = col_widths[i] if i < len(col_widths) else col_widths[-1]
-        pdf.set_xy(x_start + sum(col_widths[:i]), y_start)
+    .stat-num {{
+        font-size: 70pt;
+        font-weight: 800;
+        background: linear-gradient(135deg, #00d4ff, #a855f7);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }}
 
-        link_match = re.match(r"\[(.*?)\]\((.*?)\)", cell_text)
-        if link_match:
-            cell_text = link_match.group(1)
+    .stat-label {{
+        font-size: 20pt;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        margin-top: 4px;
+    }}
 
-        # Draw border
-        pdf.rect(pdf.get_x(), y_start, w, row_height)
-        # Write wrapped text inside
-        pdf.set_xy(x_start + sum(col_widths[:i]) + 1, y_start + 1)
-        pdf.multi_cell(w - 2, 4, cell_text)
+    .cover-footer {{
+        position: absolute;
+        bottom: 30px;
+        font-size: 20pt;
+        color: #4a5568;
+        letter-spacing: 1px;
+    }}
 
-    pdf.set_y(y_start + row_height)
+    /* ============ TOC PAGE ============ */
+    .toc-page {{
+        padding: 10mm 15mm;
+    }}
+
+    .toc-title-header {{
+        font-size: 50pt;
+        font-weight: 700;
+        color: #ffffff;
+        margin-bottom: 8px;
+    }}
+
+    .toc-line {{
+        width: 60px;
+        height: 2px;
+        background: linear-gradient(90deg, #00d4ff, #a855f7);
+        margin-bottom: 40px;
+    }}
+
+    .toc-item {{
+        display: flex;
+        align-items: baseline;
+        gap: 16px;
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }}
+
+    .toc-num {{
+        font-size: 35pt;
+        font-weight: 700;
+        color: #00d4ff;
+        min-width: 36px;
+    }}
+
+    .toc-title {{
+        font-size: 25pt;
+        color: #e0e0e0;
+    }}
+
+    /* ============ VIDEO PAGES ============ */
+    .video-page {{
+        padding: 10mm 15mm;
+    }}
+
+    .video-header {{
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 16px;
+        padding-bottom: 16px;
+        border-bottom: 2px solid;
+        border-image: linear-gradient(90deg, #00d4ff, #a855f7, #ec4899) 1;
+    }}
+
+    .video-num {{
+        font-size: 55pt;
+        font-weight: 800;
+        background: linear-gradient(135deg, #00d4ff, #a855f7);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        line-height: 1;
+        min-width: 100px;
+    }}
+
+    .video-header h2 {{
+        font-size: 35pt;
+        font-weight: 700;
+        color: #ffffff;
+        line-height: 1.3;
+    }}
+
+    .video-meta {{
+        display: flex;
+        gap: 12px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+    }}
+
+    .meta-tag {{
+        font-size: 20pt;
+        color: #9ca3af;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 4px 12px;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }}
+
+    .video-link {{
+        color: #00d4ff;
+        text-decoration: none;
+    }}
+
+    .meta-icon {{
+        color: #00d4ff;
+        margin-right: 4px;
+    }}
+
+    /* TL;DR Box */
+    .tldr-box {{
+        background: rgba(0, 212, 255, 0.05);
+        border-left: 3px solid #00d4ff;
+        border-radius: 0 8px 8px 0;
+        padding: 16px 20px;
+        margin-bottom: 24px;
+    }}
+
+    .tldr-label {{
+        font-size: 20pt;
+        font-weight: 700;
+        color: #00d4ff;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        margin-bottom: 6px;
+    }}
+
+    .tldr-box p {{
+        color: #e0e0e0;
+        font-size: 25pt;
+        line-height: 1.6;
+    }}
+
+    /* Sections */
+    .section {{
+        margin-top: 24px;
+        margin-bottom: 24px;
+    }}
+
+    .section h3 {{
+        font-size: 28pt;
+        font-weight: 700;
+        color: #a855f7;
+        margin-bottom: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }}
+
+    .section p {{
+        color: #d1d5db;
+        margin-bottom: 10px;
+        font-size: 24pt;
+        line-height: 1.7;
+    }}
+
+    /* Key Ideas */
+    .key-ideas {{
+        list-style: none;
+        padding: 0;
+    }}
+
+    .key-ideas li {{
+        color: #d1d5db;
+        font-size: 24pt;
+        padding: 6px 0 6px 4px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        line-height: 1.5;
+    }}
+
+    .bullet-icon {{
+        color: #00d4ff;
+        font-weight: 700;
+        font-size: 30pt;
+        margin-right: 8px;
+    }}
+
+    /* ============ INFOGRAPHIC ============ */
+    .infographic {{
+        background: rgba(15, 21, 53, 0.8);
+        border: 1px solid rgba(168, 85, 247, 0.2);
+        border-radius: 12px;
+        padding: 24px;
+        margin-top: 20px;
+        position: relative;
+        overflow: hidden;
+    }}
+
+    .infographic::before {{
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #00d4ff, #a855f7, #ec4899);
+    }}
+
+    .infographic-header {{
+        font-size: 18pt;
+        font-weight: 700;
+        color: #a855f7;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }}
+
+    .infographic-topic {{
+        font-size: 33pt;
+        font-weight: 700;
+        color: #ffffff;
+        margin-bottom: 16px;
+    }}
+
+    .infographic-grid {{
+        display: flex;
+        gap: 24px;
+        margin-bottom: 16px;
+    }}
+
+    .infographic-col {{
+        flex: 1;
+    }}
+
+    .infographic-label {{
+        font-size: 18pt;
+        font-weight: 700;
+        color: #00d4ff;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        margin-bottom: 8px;
+    }}
+
+    .infographic-col ul {{
+        list-style: none;
+        padding: 0;
+    }}
+
+    .infographic-col li {{
+        font-size: 21pt;
+        color: #d1d5db;
+        padding: 3px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }}
+
+    .infographic-bottom {{
+        background: linear-gradient(90deg, rgba(236, 72, 153, 0.1), rgba(168, 85, 247, 0.1));
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-size: 24pt;
+        font-weight: 600;
+        color: #ec4899;
+        text-align: center;
+    }}
+
+    /* ============ FAILED VIDEOS TABLE ============ */
+    .failed-section {{
+        padding: 10mm 15mm;
+    }}
+
+    .failed-section h2 {{
+        font-size: 35pt;
+        font-weight: 700;
+        color: #ffffff;
+        margin-bottom: 20px;
+    }}
+
+    .failed-table {{
+        width: 100%;
+        border-collapse: collapse;
+    }}
+
+    .failed-table th {{
+        font-size: 18pt;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        text-align: left;
+        padding: 8px 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }}
+
+    .failed-table td {{
+        font-size: 23pt;
+        color: #d1d5db;
+        padding: 8px 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }}
+</style>
+</head>
+<body>
+
+    <!-- COVER PAGE -->
+    <div class="cover">
+        <div class="cover-glow-1"></div>
+        <div class="cover-glow-2"></div>
+        <div class="cover-glow-3"></div>
+        <div class="cover-content">
+            <div class="cover-title">VIS</div>
+            <div class="cover-subtitle">Video Insight System</div>
+            <div class="cover-line"></div>
+            <div class="cover-date">{date_str}</div>
+            <div class="cover-stats">
+                <div class="stat-box">
+                    <div class="stat-num">{processed}</div>
+                    <div class="stat-label">Processed</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-num">{failed}</div>
+                    <div class="stat-label">Failed</div>
+                </div>
+            </div>
+        </div>
+        <div class="cover-footer">Generated by VIS (Video Insight System)</div>
+    </div>
+
+    <!-- TABLE OF CONTENTS -->
+    <div class="toc-page">
+        <div class="toc-title-header">Contents</div>
+        <div class="toc-line"></div>
+        {toc_items}
+    </div>
+
+    <!-- VIDEO PAGES -->
+    {video_sections}
+
+    <!-- FAILED VIDEOS -->
+    {failed_section}
+
+</body>
+</html>'''
+
+    return html

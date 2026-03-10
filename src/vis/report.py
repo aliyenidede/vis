@@ -32,6 +32,14 @@ def generate_report(
         lines.append(f"**Link:** {video.get('url', '')}")
         lines.append(f"**Category:** {video.get('category', 'Other')}")
         lines.append("")
+
+        # TL;DR — quick overview paragraph
+        tldr = video.get("tldr", "")
+        if tldr:
+            lines.append("### TL;DR")
+            lines.append(tldr)
+            lines.append("")
+
         lines.append("### Summary")
         lines.append(video.get("summary", "No summary available."))
         lines.append("")
@@ -39,6 +47,24 @@ def generate_report(
         for idea in video.get("key_ideas", []):
             lines.append(f"- {idea}")
         lines.append("")
+
+        # Infographic box
+        infographic = video.get("infographic", {})
+        if infographic and infographic.get("topic"):
+            lines.append("### Infographic")
+            lines.append(f"**Topic:** {infographic['topic']}")
+            if infographic.get("key_stats"):
+                lines.append("**Key Stats:**")
+                for stat in infographic["key_stats"]:
+                    lines.append(f"- {stat}")
+            if infographic.get("key_terms"):
+                lines.append("**Key Terms:**")
+                for term in infographic["key_terms"]:
+                    lines.append(f"- {term}")
+            if infographic.get("bottom_line"):
+                lines.append(f"**Bottom Line:** {infographic['bottom_line']}")
+            lines.append("")
+
         lines.append("---")
         lines.append("")
 

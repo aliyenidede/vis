@@ -1,64 +1,52 @@
 import os
 import tempfile
 import pytest
-from vis.pdf import markdown_to_pdf
+from vis.pdf import generate_pdf
 
 
-SAMPLE_MD = """# VIS Daily Report
-**Date:** 2026-01-01 12:00:00
-**Videos processed:** 2
-**Videos failed:** 1
+SAMPLE_VIDEOS = [
+    {
+        "title": "Test Video Title",
+        "video_id": "abc123",
+        "channel_title": "Test Channel",
+        "published_at": "2026-01-01",
+        "url": "https://youtube.com/watch?v=abc123",
+        "category": "Tutorial",
+        "summary": "This is a test summary with multiple sentences. It covers the main topics discussed in the video.",
+        "key_ideas": ["First key idea", "Second key idea", "Third key idea"],
+        "tldr": "A quick overview of the video content.",
+        "infographic": {
+            "topic": "Test Topic",
+            "key_stats": ["Stat 1", "Stat 2"],
+            "key_terms": ["Term 1", "Term 2"],
+            "bottom_line": "The bottom line.",
+        },
+    }
+]
 
----
-
-## 1. Test Video Title
-**Channel:** Test Channel
-**Published:** 2026-01-01
-**Link:** https://youtube.com/watch?v=abc123
-**Category:** Tutorial
-
-### Summary
-This is a test summary with multiple sentences. It covers the main topics discussed in the video.
-
-### Key Ideas & Takeaways
-- First key idea
-- Second key idea
-- Third key idea
-
----
-
-## Videos Without Transcript
-
-| # | Title | Channel | Link | Status |
-|---|-------|---------|------|--------|
-| 1 | Failed Video | Fail Channel | [Link](https://youtube.com/watch?v=fail123) | No transcript (attempt 2) |
-
----
-"""
+SAMPLE_FAILED = [
+    {
+        "title": "Failed Video",
+        "video_id": "fail123",
+        "channel_title": "Fail Channel",
+        "url": "https://youtube.com/watch?v=fail123",
+        "status": "no_transcript",
+        "retry_count": 1,
+    }
+]
 
 
 def test_pdf_generation():
     with tempfile.TemporaryDirectory() as tmpdir:
-        md_path = os.path.join(tmpdir, "test.md")
         pdf_path = os.path.join(tmpdir, "test.pdf")
-
-        with open(md_path, "w") as f:
-            f.write(SAMPLE_MD)
-
-        result = markdown_to_pdf(md_path, pdf_path)
+        result = generate_pdf(SAMPLE_VIDEOS, SAMPLE_FAILED, pdf_path, tmpdir)
         assert os.path.exists(result)
         assert os.path.getsize(result) > 0
 
 
 def test_pdf_empty_sections():
-    md = "# Report\n**Date:** 2026-01-01\n\n---\n"
     with tempfile.TemporaryDirectory() as tmpdir:
-        md_path = os.path.join(tmpdir, "test.md")
         pdf_path = os.path.join(tmpdir, "test.pdf")
-
-        with open(md_path, "w") as f:
-            f.write(md)
-
-        result = markdown_to_pdf(md_path, pdf_path)
+        result = generate_pdf([], [], pdf_path, tmpdir)
         assert os.path.exists(result)
         assert os.path.getsize(result) > 0

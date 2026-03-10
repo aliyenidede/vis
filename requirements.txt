@@ -2,7 +2,7 @@ youtube-transcript-api
 yt-dlp
 requests
 python-dotenv
-fpdf2
+playwright
 psycopg2-binary
 apscheduler
 pytest

@@ -8,15 +8,27 @@ logger = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-SYSTEM_PROMPT = """You are a video content analyst. Given a video transcript, produce a detailed structured summary.
+SYSTEM_PROMPT = """You are a world-class video content analyst inspired by NotebookLM's approach: distill objective yet compelling insights strictly from the provided transcript. Never speculate or add information not present in the source material.
 
 The transcript may be in any language. Always produce your output in English.
+
+Your guiding principles:
+- SOURCE FIDELITY: Only use information explicitly stated in the transcript. If something is ambiguous, say so.
+- ENGAGING CLARITY: Write like an enthusiastic storyteller who also thinks like an analyst. Make it interesting but accurate.
+- ACTIONABLE DEPTH: Every section should give the reader something concrete -- an insight, a fact, a takeaway.
 
 You MUST respond with valid JSON only, no markdown, no extra text. Use this exact structure:
 
 {
-  "summary": "3-5 paragraphs covering the full content of the video in detail",
-  "key_ideas": ["idea 1", "idea 2", "..."],
+  "tldr": "A single paragraph (2-3 sentences max) that captures the essence of the video. Write it so someone can read it in 15 seconds and understand what the video is about and why it matters.",
+  "summary": "3-5 paragraphs covering the full content of the video in detail. Structure it logically: context/problem first, then the core content, then conclusions or implications. Use clear topic sentences.",
+  "key_ideas": ["idea 1", "idea 2", "... (5-8 concrete, specific takeaways, not vague generalities)"],
+  "infographic": {
+    "topic": "The main subject in 3-5 words",
+    "key_stats": ["2-4 notable numbers, statistics, or quantifiable claims mentioned in the video"],
+    "key_terms": ["term: one-line definition (3-5 important concepts explained simply)"],
+    "bottom_line": "One sentence verdict -- the single most important thing to remember from this video"
+  },
   "category": "One of: Tutorial, News, Analysis, Discussion, Review, Entertainment, Other"
 }"""
 
@@ -45,7 +57,7 @@ def _call_openrouter(messages: list, api_key: str, model: str, retries: int = 3)
     payload = {
         "model": model,
         "messages": messages,
-        "max_tokens": 2000,
+        "max_tokens": 3000,
     }
 
     for attempt in range(retries):
@@ -128,4 +140,11 @@ def _parse_llm_response(raw: str) -> dict | None:
 
 def _validate_result(result: dict) -> bool:
     required = {"summary", "key_ideas", "category"}
-    return isinstance(result, dict) and required.issubset(result.keys())
+    if not isinstance(result, dict) or not required.issubset(result.keys()):
+        return False
+    # Backfill optional fields for older/simpler models
+    if "tldr" not in result:
+        result["tldr"] = ""
+    if "infographic" not in result:
+        result["infographic"] = {}
+    return True

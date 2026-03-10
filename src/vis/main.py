@@ -15,7 +15,7 @@ from .youtube import get_new_videos
 from .transcript import get_transcript
 from .summarize import summarize_transcript
 from .report import generate_report
-from .pdf import markdown_to_pdf
+from .pdf import generate_pdf
 from .telegram import send_pdf, send_error_message
 
 logger = logging.getLogger("vis")
@@ -47,7 +47,7 @@ def cleanup_old_reports(output_dir: str, max_age_days: int = 7):
     cutoff_ts = cutoff.timestamp()
     deleted = 0
 
-    for pattern in ["report_*.md", "report_*.pdf"]:
+    for pattern in ["report_*.md", "report_*.pdf", "report_*.html"]:
         for filepath in glob.glob(os.path.join(output_dir, pattern)):
             try:
                 if os.path.getmtime(filepath) < cutoff_ts:
@@ -163,9 +163,9 @@ def run_pipeline(config: Config, pool):
     # 11. Generate report
     md_path = generate_report(videos_with_summaries, failed_videos, config.output_dir)
 
-    # 12. Convert to PDF
+    # 12. Convert to PDF (dark-theme HTML → PDF via Playwright)
     pdf_path = md_path.replace(".md", ".pdf")
-    markdown_to_pdf(md_path, pdf_path)
+    generate_pdf(videos_with_summaries, failed_videos, pdf_path, config.output_dir)
 
     # 13. Send via Telegram
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")

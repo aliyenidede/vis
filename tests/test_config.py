@@ -43,6 +43,6 @@ def test_load_defaults(mock_dotenv, monkeypatch):
     config = Config.load()
     assert config.output_dir == "./output"
     assert config.max_videos == 100
-    assert config.llm_model == "google/gemini-2.0-flash-001"
+    assert config.llm_model == "deepseek/deepseek-v3.2"
     assert config.transcript_retry_days == 3
     assert config.supadata_api_key == ""
