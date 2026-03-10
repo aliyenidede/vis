@@ -68,7 +68,7 @@ Copy `.env.example` to `.env` and fill in the values:
 | `SUPADATA_API_KEY` | No | [Supadata](https://supadata.ai/) API key for transcript fallback |
 | `OUTPUT_DIR` | No | Report output directory (default: `./output`) |
 | `MAX_VIDEOS` | No | Max videos to fetch from playlist (default: `100`) |
-| `LLM_MODEL` | No | OpenRouter model ID (default: `google/gemini-2.0-flash-001`) |
+| `LLM_MODEL` | No | OpenRouter model ID (default: `deepseek/deepseek-v3.2`) |
 | `TRANSCRIPT_RETRY_DAYS` | No | Days to retry failed transcripts (default: `3`) |
 
 When using Docker Compose, also set `POSTGRES_PASSWORD` in your `.env` -- the compose file uses it for both the database and the app's `DATABASE_URL`.

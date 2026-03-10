@@ -83,7 +83,15 @@ def _call_openrouter(messages: list, api_key: str, model: str, retries: int = 3)
     return None
 
 
+def _strip_thinking(raw: str) -> str:
+    """Strip <think>...</think> blocks from reasoning model output."""
+    import re
+    return re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+
+
 def _parse_llm_response(raw: str) -> dict | None:
+    raw = _strip_thinking(raw)
+
     # Strategy 1: direct parse
     try:
         result = json.loads(raw)

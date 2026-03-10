@@ -52,7 +52,7 @@ class Config:
             database_url=os.environ["DATABASE_URL"],
             output_dir=os.getenv("OUTPUT_DIR", "./output"),
             max_videos=int(os.getenv("MAX_VIDEOS", "100")),
-            llm_model=os.getenv("LLM_MODEL", "google/gemini-2.0-flash-001"),
+            llm_model=os.getenv("LLM_MODEL", "deepseek/deepseek-v3.2"),
             transcript_retry_days=int(os.getenv("TRANSCRIPT_RETRY_DAYS", "3")),
             supadata_api_key=os.getenv("SUPADATA_API_KEY", ""),
         )
