@@ -1,4 +1,4 @@
-# VIS — Video Insight Summarizer
+# VIS — Video Insight System
 
 ## What It Does
 
