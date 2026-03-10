@@ -7,6 +7,7 @@ Commands:
     /stats   - Detailed statistics (videos, API usage, DB counts)
     /run     - Trigger a pipeline run manually
     /pending - List videos waiting for transcript retry
+    /info    - System configuration and version info
 """
 
 import logging
@@ -24,7 +25,17 @@ COMMANDS_HELP = """Available commands:
 /stats - Detailed statistics
 /run - Trigger pipeline run
 /pending - Videos waiting for transcript retry
+/info - System configuration and version
 """
+
+BOT_COMMANDS = [
+    {"command": "status", "description": "Pipeline status and last run info"},
+    {"command": "check", "description": "Check for new videos (no API credits)"},
+    {"command": "stats", "description": "Detailed statistics"},
+    {"command": "run", "description": "Trigger pipeline run"},
+    {"command": "pending", "description": "Videos waiting for transcript retry"},
+    {"command": "info", "description": "System configuration and version"},
+]
 
 
 class VISBot:
@@ -50,7 +61,20 @@ class VISBot:
             logger.error("Failed to send message: %s", e)
             return False
 
+    def _set_commands(self):
+        """Register bot commands with Telegram so the menu button appears."""
+        url = f"https://api.telegram.org/bot{self.bot_token}/setMyCommands"
+        try:
+            resp = requests.post(url, json={"commands": BOT_COMMANDS}, timeout=10)
+            if resp.status_code == 200:
+                logger.info("Bot menu commands registered")
+            else:
+                logger.warning("Failed to set bot commands: %s", resp.text)
+        except requests.RequestException as e:
+            logger.warning("Failed to set bot commands: %s", e)
+
     def start_polling(self):
+        self._set_commands()
         self._running = True
         thread = threading.Thread(target=self._poll_loop, daemon=True)
         thread.start()
@@ -104,6 +128,7 @@ class VISBot:
             "/stats": self._cmd_stats,
             "/run": self._cmd_run,
             "/pending": self._cmd_pending,
+            "/info": self._cmd_info,
         }
 
         handler = handlers.get(command)
@@ -222,6 +247,18 @@ class VISBot:
                 self.send_message(f"Run failed to start: {e}")
         else:
             self.send_message("Pipeline run callback not configured.")
+
+    def _cmd_info(self):
+        lines = ["*VIS — Video Insight System*\n"]
+        lines.append(f"Version: `v0.3.0`")
+        lines.append(f"LLM model: `{self.config.llm_model}`")
+        lines.append(f"Playlist: `{self.config.youtube_playlist_id}`")
+        lines.append(f"Max videos: {self.config.max_videos}")
+        lines.append(f"Transcript retry: {self.config.transcript_retry_days} days")
+        lines.append(f"Schedule: Daily at 08:00 (Istanbul)")
+        lines.append(f"Supadata API: {'Configured' if self.config.supadata_api_key else 'Not configured'}")
+
+        self.send_message("\n".join(lines))
 
     def _cmd_pending(self):
         from .db import get_pending_videos

@@ -41,6 +41,7 @@ src/vis/
 - `/stats` — Detailed statistics (videos by status, API usage, run count)
 - `/run` — Trigger pipeline run manually
 - `/pending` — List videos waiting for transcript retry
+- `/info` — System configuration and version info
 
 ## Commands
 
