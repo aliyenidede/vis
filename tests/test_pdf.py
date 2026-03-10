@@ -4,7 +4,7 @@ import pytest
 from vis.pdf import markdown_to_pdf
 
 
-SAMPLE_MD = """# Daily Video Insight Report
+SAMPLE_MD = """# VIS Daily Report
 **Date:** 2026-01-01 12:00:00
 **Videos processed:** 2
 **Videos failed:** 1

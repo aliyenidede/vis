@@ -71,7 +71,7 @@ def run_pipeline(config: Config, pool):
         pdf_path = report["report_path"]
         if pdf_path and os.path.exists(pdf_path):
             logger.info("Retrying unsent report: %s", pdf_path)
-            caption = f"Daily Video Insight Report (retry) — {os.path.basename(pdf_path)}"
+            caption = f"VIS Daily Report (retry) — {os.path.basename(pdf_path)}"
             if send_pdf(config.telegram_bot_token, config.telegram_chat_id, pdf_path, caption):
                 mark_telegram_sent(pool, report["id"])
 
@@ -169,7 +169,7 @@ def run_pipeline(config: Config, pool):
 
     # 13. Send via Telegram
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-    caption = f"Daily Video Insight Report — {now} — {len(videos_with_summaries)} videos"
+    caption = f"VIS Daily Report — {now} — {len(videos_with_summaries)} videos"
     telegram_sent = send_pdf(config.telegram_bot_token, config.telegram_chat_id, pdf_path, caption)
 
     # 14. Log run

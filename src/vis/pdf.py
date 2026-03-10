@@ -39,7 +39,7 @@ class ReportPDF(FPDF):
             return
         self.set_font("Helvetica", "I", 8)
         self.set_text_color(128, 128, 128)
-        self.cell(0, 8, "Daily Video Insight Report", align="R")
+        self.cell(0, 8, "VIS Daily Report", align="R")
         self.ln(10)
 
     def footer(self):
@@ -196,7 +196,7 @@ def _render_cover_page(pdf: FPDF, meta: dict):
 
     pdf.set_font("Helvetica", "B", 28)
     pdf.set_text_color(0, 51, 102)
-    pdf.cell(0, 15, "Daily Video Insight Report", align="C")
+    pdf.cell(0, 15, "VIS Daily Report", align="C")
     pdf.ln(20)
 
     # Decorative line

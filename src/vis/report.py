@@ -17,7 +17,7 @@ def generate_report(
     os.makedirs(output_dir, exist_ok=True)
 
     lines = []
-    lines.append("# Daily Video Insight Report")
+    lines.append("# VIS Daily Report")
     lines.append(f"**Date:** {timestamp}")
     lines.append(f"**Videos processed:** {len(videos_with_summaries)}")
     lines.append(f"**Videos failed:** {len(failed_videos)}")
