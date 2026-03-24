@@ -19,6 +19,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e ".[dev]"
+          playwright install --with-deps chromium
 
       - name: Lint
         run: ruff check .
