@@ -1,4 +1,3 @@
-import pytest
 from vis.summarize import _parse_llm_response
 
 

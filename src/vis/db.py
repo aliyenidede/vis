@@ -1,8 +1,6 @@
 import json
 import logging
-from datetime import datetime, timezone
 
-import psycopg2
 from psycopg2 import pool as pg_pool
 
 logger = logging.getLogger(__name__)

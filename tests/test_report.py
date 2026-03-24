@@ -1,6 +1,5 @@
 import os
 import tempfile
-import pytest
 from vis.report import generate_report
 
 

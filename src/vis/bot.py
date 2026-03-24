@@ -163,7 +163,6 @@ class VISBot:
         from .db import get_pipeline_stats
 
         stats = get_pipeline_stats(self.db_pool)
-        status_counts = stats["status_counts"]
         last_run = stats["last_run"]
 
         lines = ["*Pipeline Status*\n"]
@@ -203,7 +202,7 @@ class VISBot:
             new_videos = [v for v in all_videos if v["video_id"] not in processed_ids]
             retry_videos = [v for v in all_videos if v["video_id"] in retryable_ids]
 
-            lines = [f"*Playlist Check* (no API credits used)\n"]
+            lines = ["*Playlist Check* (no API credits used)\n"]
             lines.append(f"Total in playlist: {len(all_videos)}")
             lines.append(f"Already processed: {len(processed_ids)}")
             lines.append(f"New (unprocessed): {len(new_videos)}")
@@ -247,13 +246,13 @@ class VISBot:
         total_videos = sum(status_counts.values())
         lines.append(f"  Total: {total_videos}")
 
-        lines.append(f"\n*API Usage (this month):*")
+        lines.append("\n*API Usage (this month):*")
         lines.append(f"  Supadata calls: {supadata['total']}/100")
         lines.append(f"  Successful: {supadata['successful']}")
         remaining = max(0, 100 - supadata["total"])
         lines.append(f"  Remaining: {remaining}")
 
-        lines.append(f"\n*Pipeline:*")
+        lines.append("\n*Pipeline:*")
         lines.append(f"  Total runs: {stats['total_runs']}")
         if stats["last_run"]:
             lines.append(f"  Last run: `{stats['last_run']['run_at']}`")
@@ -278,7 +277,7 @@ class VISBot:
         lines.append(f"Playlist: `{self.config.youtube_playlist_id}`")
         lines.append(f"Max videos: {self.config.max_videos}")
         lines.append(f"Transcript retry: {self.config.transcript_retry_days} days")
-        lines.append(f"Schedule: Daily at 08:00 (Istanbul)")
+        lines.append("Schedule: Daily at 08:00 (Istanbul)")
         lines.append(
             f"Supadata API: {'Configured' if self.config.supadata_api_key else 'Not configured'}"
         )

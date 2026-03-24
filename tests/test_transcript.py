@@ -1,6 +1,5 @@
 import os
 import tempfile
-import pytest
 from vis.transcript import _truncate, _parse_vtt
 
 

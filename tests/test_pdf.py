@@ -1,6 +1,5 @@
 import os
 import tempfile
-import pytest
 from vis.pdf import generate_pdf
 
 
