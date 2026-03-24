@@ -1,4 +1,5 @@
 """Generate dark-theme HTML report and convert to PDF via Playwright (Chromium)."""
+
 import logging
 import os
 
@@ -82,15 +83,15 @@ def _generate_html(videos, failed_videos, date_str, processed, failed):
         if info and info.get("topic"):
             stats_html = ""
             for stat in info.get("key_stats", []):
-                stats_html += f'<li>{stat}</li>'
+                stats_html += f"<li>{stat}</li>"
 
             terms_html = ""
             for term in info.get("key_terms", []):
-                terms_html += f'<li>{term}</li>'
+                terms_html += f"<li>{term}</li>"
 
             bottom = info.get("bottom_line", "")
 
-            infographic_html = f'''
+            infographic_html = f"""
             <div class="infographic">
                 <div class="infographic-header">INFOGRAPHIC</div>
                 <div class="infographic-topic">{info["topic"]}</div>
@@ -105,21 +106,23 @@ def _generate_html(videos, failed_videos, date_str, processed, failed):
                     </div>
                 </div>
                 <div class="infographic-bottom">{bottom}</div>
-            </div>'''
+            </div>"""
 
         # Key insights
         insights_html = ""
         for insight in v.get("key_insights", v.get("key_ideas", [])):
-            insights_html += f'<li><span class="bullet-icon">&rsaquo;</span> {insight}</li>'
+            insights_html += (
+                f'<li><span class="bullet-icon">&rsaquo;</span> {insight}</li>'
+            )
 
         # TL;DR
         tldr_html = ""
         if v.get("tldr"):
-            tldr_html = f'''
+            tldr_html = f"""
             <div class="tldr-box">
                 <div class="tldr-label">TL;DR</div>
                 <p>{v["tldr"]}</p>
-            </div>'''
+            </div>"""
 
         # Briefing paragraphs
         briefing_text = v.get("briefing", v.get("summary", ""))
@@ -133,41 +136,45 @@ def _generate_html(videos, failed_videos, date_str, processed, failed):
         # Analysis section
         analysis_html = ""
         analysis = v.get("analysis", {})
-        if analysis and (analysis.get("why_it_matters") or analysis.get("critical_perspective") or analysis.get("open_questions")):
+        if analysis and (
+            analysis.get("why_it_matters")
+            or analysis.get("critical_perspective")
+            or analysis.get("open_questions")
+        ):
             why_html = ""
             if analysis.get("why_it_matters"):
-                why_html = f'''
+                why_html = f"""
                 <div class="analysis-block">
                     <div class="analysis-label">Why It Matters</div>
                     <p>{analysis["why_it_matters"]}</p>
-                </div>'''
+                </div>"""
 
             critical_html = ""
             if analysis.get("critical_perspective"):
-                critical_html = f'''
+                critical_html = f"""
                 <div class="analysis-block">
                     <div class="analysis-label">Critical Perspective</div>
                     <p>{analysis["critical_perspective"]}</p>
-                </div>'''
+                </div>"""
 
             questions_html = ""
             if analysis.get("open_questions"):
                 q_items = ""
                 for q in analysis["open_questions"]:
-                    q_items += f'<li>{q}</li>'
-                questions_html = f'''
+                    q_items += f"<li>{q}</li>"
+                questions_html = f"""
                 <div class="analysis-block">
                     <div class="analysis-label">Open Questions</div>
                     <ul class="open-questions">{q_items}</ul>
-                </div>'''
+                </div>"""
 
-            analysis_html = f'''
+            analysis_html = f"""
             <div class="analysis-section">
                 <h3>Analysis</h3>
                 {why_html}
                 {critical_html}
                 {questions_html}
-            </div>'''
+            </div>"""
 
         # YouTube link
         video_id = v.get("video_id", "")
@@ -175,7 +182,7 @@ def _generate_html(videos, failed_videos, date_str, processed, failed):
         if video_id:
             yt_link = f'<a class="meta-tag video-link" href="https://www.youtube.com/watch?v={video_id}" target="_blank"><span class="meta-icon">&#128279;</span> YouTube</a>'
 
-        video_sections += f'''
+        video_sections += f"""
         <div class="video-page">
             <div class="video-header">
                 <div class="video-num">{i:02d}</div>
@@ -203,7 +210,7 @@ def _generate_html(videos, failed_videos, date_str, processed, failed):
 
             {infographic_html}
         </div>
-        '''
+        """
 
     # Failed videos section
     failed_section = ""
@@ -218,18 +225,22 @@ def _generate_html(videos, failed_videos, date_str, processed, failed):
                 status_text = f"No transcript (attempt {retry_count + 1})"
 
             video_id = fv.get("video_id", "")
-            link_html = f'<a href="https://www.youtube.com/watch?v={video_id}" class="video-link">Link</a>' if video_id else ""
+            link_html = (
+                f'<a href="https://www.youtube.com/watch?v={video_id}" class="video-link">Link</a>'
+                if video_id
+                else ""
+            )
 
-            failed_rows += f'''
+            failed_rows += f"""
             <tr>
                 <td>{i}</td>
                 <td>{fv.get("title", "Unknown")}</td>
                 <td>{fv.get("channel_title", "Unknown")}</td>
                 <td>{link_html}</td>
                 <td>{status_text}</td>
-            </tr>'''
+            </tr>"""
 
-        failed_section = f'''
+        failed_section = f"""
         <div class="failed-section">
             <h2>Videos Without Transcript</h2>
             <table class="failed-table">
@@ -244,9 +255,9 @@ def _generate_html(videos, failed_videos, date_str, processed, failed):
                 </thead>
                 <tbody>{failed_rows}</tbody>
             </table>
-        </div>'''
+        </div>"""
 
-    html = f'''<!DOCTYPE html>
+    html = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -796,6 +807,6 @@ def _generate_html(videos, failed_videos, date_str, processed, failed):
     {failed_section}
 
 </body>
-</html>'''
+</html>"""
 
     return html

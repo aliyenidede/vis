@@ -1,12 +1,20 @@
 import os
 import pytest
 from vis.db import (
-    init_db, close_pool, get_processed_ids, get_retryable_videos,
-    upsert_video, log_run, get_unsent_reports, mark_telegram_sent,
+    init_db,
+    close_pool,
+    get_processed_ids,
+    get_retryable_videos,
+    upsert_video,
+    log_run,
+    get_unsent_reports,
+    mark_telegram_sent,
     expire_old_retries,
 )
 
-DATABASE_URL = os.getenv("TEST_DATABASE_URL", "postgresql://vis:changeme@localhost:5432/vis_test")
+DATABASE_URL = os.getenv(
+    "TEST_DATABASE_URL", "postgresql://vis:changeme@localhost:5432/vis_test"
+)
 
 pytestmark = pytest.mark.skipif(
     not os.getenv("TEST_DATABASE_URL"),
@@ -40,49 +48,61 @@ def test_init_db_creates_tables(pool):
 
 
 def test_upsert_and_get_processed(pool):
-    upsert_video(pool, {
-        "video_id": "v1",
-        "title": "Test",
-        "status": "ok",
-        "summary": "sum",
-        "key_ideas": ["a"],
-        "category": "Tutorial",
-    })
+    upsert_video(
+        pool,
+        {
+            "video_id": "v1",
+            "title": "Test",
+            "status": "ok",
+            "summary": "sum",
+            "key_ideas": ["a"],
+            "category": "Tutorial",
+        },
+    )
 
     ids = get_processed_ids(pool)
     assert "v1" in ids
 
 
 def test_upsert_update(pool):
-    upsert_video(pool, {
-        "video_id": "v2",
-        "title": "Test",
-        "status": "no_transcript",
-        "retry_count": 1,
-    })
-    upsert_video(pool, {
-        "video_id": "v2",
-        "title": "Test",
-        "status": "ok",
-        "retry_count": 1,
-        "summary": "done",
-        "key_ideas": ["b"],
-        "category": "News",
-    })
+    upsert_video(
+        pool,
+        {
+            "video_id": "v2",
+            "title": "Test",
+            "status": "no_transcript",
+            "retry_count": 1,
+        },
+    )
+    upsert_video(
+        pool,
+        {
+            "video_id": "v2",
+            "title": "Test",
+            "status": "ok",
+            "retry_count": 1,
+            "summary": "done",
+            "key_ideas": ["b"],
+            "category": "News",
+        },
+    )
 
     ids = get_processed_ids(pool)
     assert "v2" in ids
 
 
 def test_log_run_and_unsent(pool):
-    run_id = log_run(pool, {
-        "videos_found": 5,
-        "videos_processed": 3,
-        "videos_skipped": 2,
-        "report_path": "/tmp/test.pdf",
-        "success": True,
-        "telegram_sent": False,
-    })
+    run_id = log_run(
+        pool,
+        {
+            "videos_found": 5,
+            "videos_processed": 3,
+            "videos_skipped": 2,
+            "report_path": "/tmp/test.pdf",
+            "success": True,
+            "telegram_sent": False,
+        },
+    )
 
     unsent = get_unsent_reports(pool)
     assert any(r["id"] == run_id for r in unsent)

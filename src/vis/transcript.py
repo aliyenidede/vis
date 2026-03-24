@@ -35,9 +35,13 @@ def get_transcript(video_id: str, supadata_api_key: str = "", db_pool=None) -> t
         # Check monthly usage before consuming a credit
         if db_pool:
             from .db import get_api_usage_this_month
+
             usage = get_api_usage_this_month(db_pool, "supadata")
             if usage["total"] >= 95:  # Leave 5 credits buffer
-                logger.warning("Supadata monthly limit nearly reached (%d/100), skipping", usage["total"])
+                logger.warning(
+                    "Supadata monthly limit nearly reached (%d/100), skipping",
+                    usage["total"],
+                )
                 return None, None
 
         logger.info("Layer 2 failed for %s, trying Supadata", video_id)
@@ -46,6 +50,7 @@ def get_transcript(video_id: str, supadata_api_key: str = "", db_pool=None) -> t
         # Track API usage
         if db_pool:
             from .db import log_api_usage
+
             log_api_usage(db_pool, "supadata", video_id, success=bool(text))
 
         if text:
@@ -63,7 +68,11 @@ def _try_youtube_transcript_api(video_id: str) -> tuple:
             transcript = ytt_api.fetch(video_id, languages=languages)
             text = " ".join(snippet.text for snippet in transcript.snippets)
             lang = languages[0]
-            logger.info("Got transcript for %s via youtube-transcript-api (lang=%s)", video_id, lang)
+            logger.info(
+                "Got transcript for %s via youtube-transcript-api (lang=%s)",
+                video_id,
+                lang,
+            )
             return _truncate(text), lang
         except (NoTranscriptFound, TranscriptsDisabled):
             continue
@@ -74,7 +83,12 @@ def _try_youtube_transcript_api(video_id: str) -> tuple:
             logger.warning("Request blocked for %s, will try next layer", video_id)
             return None, None
         except Exception as e:
-            logger.debug("youtube-transcript-api error for %s with %s: %s", video_id, languages, e)
+            logger.debug(
+                "youtube-transcript-api error for %s with %s: %s",
+                video_id,
+                languages,
+                e,
+            )
             continue
 
     # Try listing all available transcripts
@@ -86,7 +100,11 @@ def _try_youtube_transcript_api(video_id: str) -> tuple:
                 try:
                     transcript = ytt_api.fetch(video_id, languages=[t.language_code])
                     text = " ".join(snippet.text for snippet in transcript.snippets)
-                    logger.info("Got manual transcript for %s (lang=%s)", video_id, t.language_code)
+                    logger.info(
+                        "Got manual transcript for %s (lang=%s)",
+                        video_id,
+                        t.language_code,
+                    )
                     return _truncate(text), t.language_code
                 except Exception:
                     continue
@@ -96,7 +114,11 @@ def _try_youtube_transcript_api(video_id: str) -> tuple:
                 try:
                     transcript = ytt_api.fetch(video_id, languages=[t.language_code])
                     text = " ".join(snippet.text for snippet in transcript.snippets)
-                    logger.info("Got auto-generated transcript for %s (lang=%s)", video_id, t.language_code)
+                    logger.info(
+                        "Got auto-generated transcript for %s (lang=%s)",
+                        video_id,
+                        t.language_code,
+                    )
                     return _truncate(text), f"auto-{t.language_code}"
                 except Exception:
                     continue
@@ -152,12 +174,22 @@ def _try_yt_dlp(video_id: str) -> tuple:
                                 ydl2.download([url])
 
                             import glob
+
                             vtt_files = glob.glob(f"{tmpdir}/*.vtt")
                             if vtt_files:
                                 text = _parse_vtt(vtt_files[0])
                                 if text:
-                                    prefix = "auto-" if sub_source == "automatic_captions" else ""
-                                    logger.info("Got transcript via yt-dlp for %s (lang=%s%s)", video_id, prefix, lang)
+                                    prefix = (
+                                        "auto-"
+                                        if sub_source == "automatic_captions"
+                                        else ""
+                                    )
+                                    logger.info(
+                                        "Got transcript via yt-dlp for %s (lang=%s%s)",
+                                        video_id,
+                                        prefix,
+                                        lang,
+                                    )
                                     return _truncate(text), f"{prefix}{lang}"
 
                     # Try any available language
@@ -177,12 +209,22 @@ def _try_yt_dlp(video_id: str) -> tuple:
                             ydl2.download([url])
 
                         import glob
+
                         vtt_files = glob.glob(f"{tmpdir}/*.vtt")
                         if vtt_files:
                             text = _parse_vtt(vtt_files[0])
                             if text:
-                                prefix = "auto-" if sub_source == "automatic_captions" else ""
-                                logger.info("Got transcript via yt-dlp for %s (lang=%s%s)", video_id, prefix, lang)
+                                prefix = (
+                                    "auto-"
+                                    if sub_source == "automatic_captions"
+                                    else ""
+                                )
+                                logger.info(
+                                    "Got transcript via yt-dlp for %s (lang=%s%s)",
+                                    video_id,
+                                    prefix,
+                                    lang,
+                                )
                                 return _truncate(text), f"{prefix}{lang}"
 
         except Exception as e:
@@ -203,7 +245,9 @@ def _try_supadata(video_id: str, api_key: str) -> tuple:
             text = data.get("content", "")
             lang = data.get("lang", "unknown")
             if text:
-                logger.info("Got transcript via Supadata for %s (lang=%s)", video_id, lang)
+                logger.info(
+                    "Got transcript via Supadata for %s (lang=%s)", video_id, lang
+                )
                 return _truncate(text), f"supadata-{lang}"
 
         if response.status_code == 429:
@@ -211,7 +255,12 @@ def _try_supadata(video_id: str, api_key: str) -> tuple:
         elif response.status_code == 402:
             logger.warning("Supadata quota exhausted")
         else:
-            logger.warning("Supadata failed for %s: %d %s", video_id, response.status_code, response.text[:200])
+            logger.warning(
+                "Supadata failed for %s: %d %s",
+                video_id,
+                response.status_code,
+                response.text[:200],
+            )
 
     except requests.RequestException as e:
         logger.warning("Supadata request failed for %s: %s", video_id, e)
@@ -251,6 +300,10 @@ def _parse_vtt(filepath: str) -> str:
 
 def _truncate(text: str) -> str:
     if len(text) > MAX_TRANSCRIPT_LENGTH:
-        logger.info("Truncating transcript from %d to %d characters", len(text), MAX_TRANSCRIPT_LENGTH)
+        logger.info(
+            "Truncating transcript from %d to %d characters",
+            len(text),
+            MAX_TRANSCRIPT_LENGTH,
+        )
         return text[:MAX_TRANSCRIPT_LENGTH]
     return text

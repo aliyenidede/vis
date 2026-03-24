@@ -27,7 +27,9 @@ This is a test
 00:00:10.000 --> 00:00:15.000
 This is a test
 """
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".vtt", delete=False, encoding="utf-8") as f:
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".vtt", delete=False, encoding="utf-8"
+    ) as f:
         f.write(vtt_content)
         f.flush()
         path = f.name
@@ -48,7 +50,9 @@ def test_parse_vtt_with_tags():
 00:00:00.000 --> 00:00:05.000
 <c.colorE5E5E5>Hello</c> <c.colorCCCCCC>world</c>
 """
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".vtt", delete=False, encoding="utf-8") as f:
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".vtt", delete=False, encoding="utf-8"
+    ) as f:
         f.write(vtt_content)
         f.flush()
         path = f.name

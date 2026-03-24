@@ -14,7 +14,11 @@ SAMPLE_VIDEOS = [
         "category": "Tutorial",
         "headline": "Understanding Test Topics in Depth",
         "briefing": "This is a test briefing with multiple sentences.\n\nIt covers the main topics in educational depth.",
-        "key_insights": ["First key insight", "Second key insight", "Third key insight"],
+        "key_insights": [
+            "First key insight",
+            "Second key insight",
+            "Third key insight",
+        ],
         "tldr": "A quick overview of what you'll learn about test topics.",
         "analysis": {
             "why_it_matters": "This matters because testing is fundamental.",

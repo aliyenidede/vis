@@ -23,12 +23,18 @@ def send_pdf(bot_token: str, chat_id: str, pdf_path: str, caption: str) -> bool:
                 return True
 
             if response.status_code == 429:
-                retry_after = response.json().get("parameters", {}).get("retry_after", 5)
+                retry_after = (
+                    response.json().get("parameters", {}).get("retry_after", 5)
+                )
                 logger.warning("Telegram rate limited, waiting %ds", retry_after)
                 time.sleep(retry_after)
                 continue
 
-            logger.error("Telegram sendDocument failed (%d): %s", response.status_code, response.text[:300])
+            logger.error(
+                "Telegram sendDocument failed (%d): %s",
+                response.status_code,
+                response.text[:300],
+            )
             return False
 
         except requests.RequestException as e:
@@ -53,12 +59,18 @@ def send_error_message(bot_token: str, chat_id: str, message: str) -> bool:
                 return True
 
             if response.status_code == 429:
-                retry_after = response.json().get("parameters", {}).get("retry_after", 5)
+                retry_after = (
+                    response.json().get("parameters", {}).get("retry_after", 5)
+                )
                 logger.warning("Telegram rate limited, waiting %ds", retry_after)
                 time.sleep(retry_after)
                 continue
 
-            logger.error("Telegram sendMessage failed (%d): %s", response.status_code, response.text[:300])
+            logger.error(
+                "Telegram sendMessage failed (%d): %s",
+                response.status_code,
+                response.text[:300],
+            )
             return False
 
         except requests.RequestException as e:

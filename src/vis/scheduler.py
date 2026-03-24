@@ -56,6 +56,7 @@ def start_scheduler():
     except AttributeError:
         # Windows doesn't have signal.pause
         import time
+
         while True:
             time.sleep(60)
 

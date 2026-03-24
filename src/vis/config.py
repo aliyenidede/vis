@@ -6,7 +6,12 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-SENSITIVE_KEYS = {"OPENROUTER_API_KEY", "TELEGRAM_BOT_TOKEN", "DATABASE_URL", "SUPADATA_API_KEY"}
+SENSITIVE_KEYS = {
+    "OPENROUTER_API_KEY",
+    "TELEGRAM_BOT_TOKEN",
+    "DATABASE_URL",
+    "SUPADATA_API_KEY",
+}
 
 REQUIRED_KEYS = [
     "YOUTUBE_PLAYLIST_ID",
@@ -42,7 +47,9 @@ class Config:
 
         missing = [k for k in REQUIRED_KEYS if not os.getenv(k)]
         if missing:
-            raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+            raise ValueError(
+                f"Missing required environment variables: {', '.join(missing)}"
+            )
 
         config = cls(
             youtube_playlist_id=os.environ["YOUTUBE_PLAYLIST_ID"],

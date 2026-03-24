@@ -49,6 +49,17 @@ CREATE INDEX IF NOT EXISTS idx_pv_first_seen ON processed_videos(first_seen_at);
 CREATE INDEX IF NOT EXISTS idx_rl_run_at ON run_log(run_at);
 CREATE INDEX IF NOT EXISTS idx_api_usage_name ON api_usage(api_name);
 CREATE INDEX IF NOT EXISTS idx_api_usage_used_at ON api_usage(used_at);
+
+CREATE TABLE IF NOT EXISTS monitored_channels (
+    id              SERIAL PRIMARY KEY,
+    channel_input   TEXT NOT NULL,
+    channel_name    TEXT,
+    added_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    active          BOOLEAN DEFAULT TRUE,
+    UNIQUE(channel_input)
+);
+
+ALTER TABLE processed_videos ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'playlist';
 """
 
 
@@ -72,13 +83,17 @@ def get_processed_ids(pool: pg_pool.SimpleConnectionPool) -> set:
     conn = pool.getconn()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT video_id FROM processed_videos WHERE status IN ('ok', 'gave_up')")
+            cur.execute(
+                "SELECT video_id FROM processed_videos WHERE status IN ('ok', 'gave_up')"
+            )
             return {row[0] for row in cur.fetchall()}
     finally:
         pool.putconn(conn)
 
 
-def get_retryable_videos(pool: pg_pool.SimpleConnectionPool, max_retry_days: int) -> list:
+def get_retryable_videos(
+    pool: pg_pool.SimpleConnectionPool, max_retry_days: int
+) -> list:
     conn = pool.getconn()
     try:
         with conn.cursor() as cur:
@@ -103,8 +118,8 @@ def upsert_video(pool: pg_pool.SimpleConnectionPool, video_data: dict) -> None:
                 """INSERT INTO processed_videos
                        (video_id, title, channel_title, published_at, url, status,
                         retry_count, first_seen_at, processed_at, summary, key_ideas,
-                        category, transcript_language)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s)
+                        category, transcript_language, source)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (video_id) DO UPDATE SET
                        status = EXCLUDED.status,
                        retry_count = EXCLUDED.retry_count,
@@ -112,7 +127,8 @@ def upsert_video(pool: pg_pool.SimpleConnectionPool, video_data: dict) -> None:
                        summary = EXCLUDED.summary,
                        key_ideas = EXCLUDED.key_ideas,
                        category = EXCLUDED.category,
-                       transcript_language = EXCLUDED.transcript_language""",
+                       transcript_language = EXCLUDED.transcript_language,
+                       source = EXCLUDED.source""",
                 (
                     video_data["video_id"],
                     video_data["title"],
@@ -123,9 +139,12 @@ def upsert_video(pool: pg_pool.SimpleConnectionPool, video_data: dict) -> None:
                     video_data.get("retry_count", 0),
                     video_data.get("processed_at"),
                     video_data.get("summary"),
-                    json.dumps(video_data["key_ideas"]) if video_data.get("key_ideas") else None,
+                    json.dumps(video_data["key_ideas"])
+                    if video_data.get("key_ideas")
+                    else None,
                     video_data.get("category"),
                     video_data.get("transcript_language"),
+                    video_data.get("source", "playlist"),
                 ),
             )
         conn.commit()
@@ -184,7 +203,9 @@ def mark_telegram_sent(pool: pg_pool.SimpleConnectionPool, run_id: int) -> None:
     conn = pool.getconn()
     try:
         with conn.cursor() as cur:
-            cur.execute("UPDATE run_log SET telegram_sent = TRUE WHERE id = %s", (run_id,))
+            cur.execute(
+                "UPDATE run_log SET telegram_sent = TRUE WHERE id = %s", (run_id,)
+            )
         conn.commit()
     except Exception:
         conn.rollback()
@@ -218,7 +239,9 @@ def expire_old_retries(pool: pg_pool.SimpleConnectionPool, max_retry_days: int) 
         pool.putconn(conn)
 
 
-def log_api_usage(pool: pg_pool.SimpleConnectionPool, api_name: str, video_id: str, success: bool) -> None:
+def log_api_usage(
+    pool: pg_pool.SimpleConnectionPool, api_name: str, video_id: str, success: bool
+) -> None:
     conn = pool.getconn()
     try:
         with conn.cursor() as cur:
@@ -288,7 +311,9 @@ def get_pipeline_stats(pool: pg_pool.SimpleConnectionPool) -> dict:
                     "run_at": last_run[0].isoformat() if last_run else None,
                     "videos_processed": last_run[1] if last_run else 0,
                     "telegram_sent": last_run[2] if last_run else False,
-                } if last_run else None,
+                }
+                if last_run
+                else None,
                 "total_runs": total_runs,
                 "supadata_this_month": supadata_this_month,
             }
@@ -308,6 +333,102 @@ def get_pending_videos(pool: pg_pool.SimpleConnectionPool) -> list:
             )
             cols = [desc[0] for desc in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
+    finally:
+        pool.putconn(conn)
+
+
+def add_channel(pool: pg_pool.SimpleConnectionPool, channel_input: str):
+    """Add a channel to monitor. Re-activates if previously removed.
+
+    Returns:
+        (channel_id, is_new) tuple. channel_id is None if already active.
+    """
+    conn = pool.getconn()
+    try:
+        with conn.cursor() as cur:
+            # Check if channel exists (active or inactive)
+            cur.execute(
+                "SELECT id, active FROM monitored_channels WHERE channel_input = %s",
+                (channel_input,),
+            )
+            existing = cur.fetchone()
+
+            if existing:
+                channel_id, active = existing
+                if active:
+                    conn.rollback()
+                    return None, False  # Already active
+                # Re-activate previously removed channel
+                cur.execute(
+                    "UPDATE monitored_channels SET active = TRUE, added_at = NOW() WHERE id = %s",
+                    (channel_id,),
+                )
+                conn.commit()
+                return channel_id, False  # Re-activated
+            else:
+                cur.execute(
+                    "INSERT INTO monitored_channels (channel_input) VALUES (%s) RETURNING id",
+                    (channel_input,),
+                )
+                channel_id = cur.fetchone()[0]
+                conn.commit()
+                return channel_id, True  # New
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+
+
+def remove_channel(pool: pg_pool.SimpleConnectionPool, channel_id: int) -> None:
+    """Soft-delete a monitored channel."""
+    conn = pool.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE monitored_channels SET active = FALSE WHERE id = %s",
+                (channel_id,),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+
+
+def get_active_channels(pool: pg_pool.SimpleConnectionPool) -> list:
+    """Get all active monitored channels."""
+    conn = pool.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT id, channel_input, channel_name, added_at
+                   FROM monitored_channels
+                   WHERE active = TRUE
+                   ORDER BY added_at"""
+            )
+            cols = [desc[0] for desc in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]
+    finally:
+        pool.putconn(conn)
+
+
+def update_channel_name(
+    pool: pg_pool.SimpleConnectionPool, channel_id: int, name: str
+) -> None:
+    """Update the resolved display name of a channel."""
+    conn = pool.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE monitored_channels SET channel_name = %s WHERE id = %s",
+                (name, channel_id),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         pool.putconn(conn)
 

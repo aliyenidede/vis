@@ -1,13 +1,16 @@
 """Telegram bot with commands for VIS pipeline management.
 
 Commands:
-    /start   - Welcome message and available commands
-    /status  - Pipeline status and last run info
-    /check   - Check for new videos without processing (no API credits used)
-    /stats   - Detailed statistics (videos, API usage, DB counts)
-    /run     - Trigger a pipeline run manually
-    /pending - List videos waiting for transcript retry
-    /info    - System configuration and version info
+    /start      - Welcome message and available commands
+    /status     - Pipeline status and last run info
+    /check      - Check for new videos without processing (no API credits used)
+    /stats      - Detailed statistics (videos, API usage, DB counts)
+    /run        - Trigger a pipeline run manually
+    /pending    - List videos waiting for transcript retry
+    /info       - System configuration and version info
+    /addchannel - Add a YouTube channel to monitor
+    /rmchannel  - Remove a monitored channel
+    /channels   - List monitored channels
 """
 
 import logging
@@ -26,6 +29,9 @@ COMMANDS_HELP = """Available commands:
 /run - Trigger pipeline run
 /pending - Videos waiting for transcript retry
 /info - System configuration and version
+/addchannel - Add a YouTube channel to monitor
+/rmchannel - Remove a monitored channel
+/channels - List monitored channels
 """
 
 BOT_COMMANDS = [
@@ -35,6 +41,9 @@ BOT_COMMANDS = [
     {"command": "run", "description": "Trigger pipeline run"},
     {"command": "pending", "description": "Videos waiting for transcript retry"},
     {"command": "info", "description": "System configuration and version"},
+    {"command": "addchannel", "description": "Add a YouTube channel to monitor"},
+    {"command": "rmchannel", "description": "Remove a monitored channel"},
+    {"command": "channels", "description": "List monitored channels"},
 ]
 
 
@@ -120,6 +129,9 @@ class VISBot:
             return
 
         command = text.split()[0].lower().split("@")[0]  # Handle /command@botname
+        args = (
+            text.split(maxsplit=1)[1].strip() if len(text.split(maxsplit=1)) > 1 else ""
+        )
 
         handlers = {
             "/start": self._cmd_start,
@@ -129,22 +141,25 @@ class VISBot:
             "/run": self._cmd_run,
             "/pending": self._cmd_pending,
             "/info": self._cmd_info,
+            "/addchannel": self._cmd_addchannel,
+            "/rmchannel": self._cmd_rmchannel,
+            "/channels": self._cmd_channels,
         }
 
         handler = handlers.get(command)
         if handler:
             try:
-                handler()
+                handler(args)
             except Exception as e:
                 logger.error("Command %s failed: %s", command, e, exc_info=True)
-                self.send_message(f"Error: {e}")
+                self.send_message(f"Error: {e}", parse_mode=None)
         else:
             self.send_message(f"Unknown command: {command}\n\n{COMMANDS_HELP}")
 
-    def _cmd_start(self):
+    def _cmd_start(self, args=""):
         self.send_message(f"VIS Bot active.\n\n{COMMANDS_HELP}")
 
-    def _cmd_status(self):
+    def _cmd_status(self, args=""):
         from .db import get_pipeline_stats
 
         stats = get_pipeline_stats(self.db_pool)
@@ -156,7 +171,9 @@ class VISBot:
         if last_run:
             lines.append(f"Last run: `{last_run['run_at']}`")
             lines.append(f"Videos processed: {last_run['videos_processed']}")
-            lines.append(f"Telegram sent: {'Yes' if last_run['telegram_sent'] else 'No'}")
+            lines.append(
+                f"Telegram sent: {'Yes' if last_run['telegram_sent'] else 'No'}"
+            )
         else:
             lines.append("No successful runs yet.")
 
@@ -165,7 +182,7 @@ class VISBot:
 
         self.send_message("\n".join(lines))
 
-    def _cmd_check(self):
+    def _cmd_check(self, args=""):
         """Check for new videos without fetching transcripts (no API credits)."""
         from .youtube import fetch_playlist_videos
         from .db import get_processed_ids, get_retryable_videos
@@ -178,7 +195,9 @@ class VISBot:
                 self.config.max_videos,
             )
             processed_ids = get_processed_ids(self.db_pool)
-            retryable = get_retryable_videos(self.db_pool, self.config.transcript_retry_days)
+            retryable = get_retryable_videos(
+                self.db_pool, self.config.transcript_retry_days
+            )
             retryable_ids = {v["video_id"] for v in retryable}
 
             new_videos = [v for v in all_videos if v["video_id"] not in processed_ids]
@@ -200,15 +219,19 @@ class VISBot:
             if retry_videos:
                 lines.append("\n*Pending retry:*")
                 for v in retry_videos[:5]:
-                    r = next((rv for rv in retryable if rv["video_id"] == v["video_id"]), {})
-                    lines.append(f"  - {v['title']} (attempt {r.get('retry_count', 0)})")
+                    r = next(
+                        (rv for rv in retryable if rv["video_id"] == v["video_id"]), {}
+                    )
+                    lines.append(
+                        f"  - {v['title']} (attempt {r.get('retry_count', 0)})"
+                    )
 
             self.send_message("\n".join(lines))
 
         except Exception as e:
             self.send_message(f"Check failed: {e}")
 
-    def _cmd_stats(self):
+    def _cmd_stats(self, args=""):
         from .db import get_pipeline_stats, get_api_usage_this_month
 
         stats = get_pipeline_stats(self.db_pool)
@@ -227,7 +250,7 @@ class VISBot:
         lines.append(f"\n*API Usage (this month):*")
         lines.append(f"  Supadata calls: {supadata['total']}/100")
         lines.append(f"  Successful: {supadata['successful']}")
-        remaining = max(0, 100 - supadata['total'])
+        remaining = max(0, 100 - supadata["total"])
         lines.append(f"  Remaining: {remaining}")
 
         lines.append(f"\n*Pipeline:*")
@@ -237,7 +260,7 @@ class VISBot:
 
         self.send_message("\n".join(lines))
 
-    def _cmd_run(self):
+    def _cmd_run(self, args=""):
         if self._run_callback:
             self.send_message("Triggering pipeline run...")
             try:
@@ -248,19 +271,21 @@ class VISBot:
         else:
             self.send_message("Pipeline run callback not configured.")
 
-    def _cmd_info(self):
+    def _cmd_info(self, args=""):
         lines = ["*VIS — Video Insight System*\n"]
-        lines.append(f"Version: `v0.3.0`")
+        lines.append("Version: `v0.4.0`")
         lines.append(f"LLM model: `{self.config.llm_model}`")
         lines.append(f"Playlist: `{self.config.youtube_playlist_id}`")
         lines.append(f"Max videos: {self.config.max_videos}")
         lines.append(f"Transcript retry: {self.config.transcript_retry_days} days")
         lines.append(f"Schedule: Daily at 08:00 (Istanbul)")
-        lines.append(f"Supadata API: {'Configured' if self.config.supadata_api_key else 'Not configured'}")
+        lines.append(
+            f"Supadata API: {'Configured' if self.config.supadata_api_key else 'Not configured'}"
+        )
 
         self.send_message("\n".join(lines))
 
-    def _cmd_pending(self):
+    def _cmd_pending(self, args=""):
         from .db import get_pending_videos
 
         pending = get_pending_videos(self.db_pool)
@@ -278,5 +303,110 @@ class VISBot:
 
         if len(pending) > 15:
             lines.append(f"\n... and {len(pending) - 15} more")
+
+        self.send_message("\n".join(lines))
+
+    def _cmd_addchannel(self, args=""):
+        """Add a YouTube channel to monitor."""
+        from .db import add_channel, remove_channel, update_channel_name
+        from .youtube import fetch_channel_videos
+
+        if not args:
+            self.send_message("Usage: /addchannel <@handle or URL or channel ID>")
+            return
+
+        channel_input = args.strip()
+        self.send_message(f"Adding channel: `{channel_input}`...")
+
+        channel_id, is_new = add_channel(self.db_pool, channel_input)
+        if channel_id is None:
+            self.send_message(f"Channel `{channel_input}` is already being monitored.")
+            return
+
+        # Validate by test fetch
+        videos, channel_name = fetch_channel_videos(channel_input, max_results=1)
+        if channel_name is None:
+            remove_channel(self.db_pool, channel_id)
+            self.send_message(
+                f"Failed to fetch channel `{channel_input}`. "
+                "Check the URL/handle and try again."
+            )
+            return
+
+        if channel_name:
+            update_channel_name(self.db_pool, channel_id, channel_name)
+
+        display = channel_name or channel_input
+        self.send_message(
+            f"Channel added: `{display}`\n"
+            f"New videos will be processed in the next pipeline run."
+        )
+
+    def _cmd_rmchannel(self, args=""):
+        """Remove a monitored channel."""
+        from .db import get_active_channels, remove_channel
+
+        if not args:
+            self.send_message("Usage: /rmchannel <id or channel name>")
+            return
+
+        channels = get_active_channels(self.db_pool)
+        if not channels:
+            self.send_message("No channels are being monitored.")
+            return
+
+        arg = args.strip()
+        matched = None
+
+        # Try matching by ID (exact)
+        try:
+            target_id = int(arg)
+            matched = next((c for c in channels if c["id"] == target_id), None)
+        except ValueError:
+            pass
+
+        # Try matching by name or input (partial, case-insensitive)
+        if not matched:
+            arg_lower = arg.lower()
+            matches = []
+            for c in channels:
+                name = (c.get("channel_name") or "").lower()
+                inp = c["channel_input"].lower()
+                if arg_lower in name or arg_lower in inp:
+                    matches.append(c)
+
+            if len(matches) == 1:
+                matched = matches[0]
+            elif len(matches) > 1:
+                lines = [f"Multiple channels match `{arg}`. Use the ID:\n"]
+                for c in matches:
+                    display = c.get("channel_name") or c["channel_input"]
+                    lines.append(f"  #{c['id']} — `{display}`")
+                self.send_message("\n".join(lines))
+                return
+
+        if not matched:
+            self.send_message(f"No channel matching `{arg}` found.")
+            return
+
+        remove_channel(self.db_pool, matched["id"])
+        display = matched.get("channel_name") or matched["channel_input"]
+        self.send_message(f"Channel removed: `{display}`")
+
+    def _cmd_channels(self, args=""):
+        """List monitored channels."""
+        from .db import get_active_channels
+
+        channels = get_active_channels(self.db_pool)
+
+        if not channels:
+            self.send_message("No channels are being monitored.")
+            return
+
+        lines = [f"*Monitored Channels* ({len(channels)})\n"]
+        for c in channels:
+            name = c.get("channel_name") or c["channel_input"]
+            added = c["added_at"].strftime("%Y-%m-%d") if c.get("added_at") else "?"
+            lines.append(f"  #{c['id']} — `{name}` (added {added})")
 
         self.send_message("\n".join(lines))

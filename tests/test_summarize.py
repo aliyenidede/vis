@@ -19,7 +19,9 @@ def test_parse_old_field_names_remapped():
 
 
 def test_parse_json_in_markdown_block():
-    raw = '```json\n{"briefing": "test", "key_insights": ["a"], "category": "News"}\n```'
+    raw = (
+        '```json\n{"briefing": "test", "key_insights": ["a"], "category": "News"}\n```'
+    )
     result = _parse_llm_response(raw)
     assert result is not None
     assert result["category"] == "News"

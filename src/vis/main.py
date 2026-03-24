@@ -8,8 +8,13 @@ from logging.handlers import RotatingFileHandler
 
 from .config import Config
 from .db import (
-    init_db, close_pool, log_run, get_unsent_reports,
-    mark_telegram_sent, expire_old_retries, upsert_video,
+    init_db,
+    close_pool,
+    log_run,
+    get_unsent_reports,
+    mark_telegram_sent,
+    expire_old_retries,
+    upsert_video,
 )
 from .youtube import get_new_videos
 from .transcript import get_transcript
@@ -35,7 +40,9 @@ def setup_logging(output_dir: str):
     root.addHandler(console)
 
     log_path = os.path.join(output_dir, "vis.log")
-    file_handler = RotatingFileHandler(log_path, maxBytes=5 * 1024 * 1024, backupCount=3)
+    file_handler = RotatingFileHandler(
+        log_path, maxBytes=5 * 1024 * 1024, backupCount=3
+    )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(fmt)
     root.addHandler(file_handler)
@@ -72,14 +79,14 @@ def run_pipeline(config: Config, pool):
         if pdf_path and os.path.exists(pdf_path):
             logger.info("Retrying unsent report: %s", pdf_path)
             caption = f"VIS Daily Report (retry) — {os.path.basename(pdf_path)}"
-            if send_pdf(config.telegram_bot_token, config.telegram_chat_id, pdf_path, caption):
+            if send_pdf(
+                config.telegram_bot_token, config.telegram_chat_id, pdf_path, caption
+            ):
                 mark_telegram_sent(pool, report["id"])
 
     # 5. Expire old retries
     expired = expire_old_retries(pool, config.transcript_retry_days)
-    failed_videos = [
-        {**v, "status": "gave_up"} for v in expired
-    ]
+    failed_videos = [{**v, "status": "gave_up"} for v in expired]
 
     # 6-7. Fetch and filter videos
     new_videos = get_new_videos(
@@ -102,30 +109,40 @@ def run_pipeline(config: Config, pool):
         logger.info("Processing: %s (%s)", video["title"], video_id)
 
         # 9a. Fetch transcript
-        transcript_text, lang = get_transcript(video_id, config.supadata_api_key, db_pool=pool)
+        transcript_text, lang = get_transcript(
+            video_id, config.supadata_api_key, db_pool=pool
+        )
         time.sleep(2)  # Rate limiting between transcript fetches
 
         # 9b. No transcript
         if not transcript_text:
             retry_count = video.get("retry_count", 0) + 1
-            upsert_video(pool, {
-                "video_id": video_id,
-                "title": video["title"],
-                "channel_title": video.get("channel_title"),
-                "published_at": video.get("published_at") or None,
-                "url": video.get("url"),
-                "status": "no_transcript",
-                "retry_count": retry_count,
-            })
-            failed_videos.append({**video, "status": "no_transcript", "retry_count": retry_count})
+            upsert_video(
+                pool,
+                {
+                    "video_id": video_id,
+                    "title": video["title"],
+                    "channel_title": video.get("channel_title"),
+                    "published_at": video.get("published_at") or None,
+                    "url": video.get("url"),
+                    "status": "no_transcript",
+                    "retry_count": retry_count,
+                    "source": video.get("source", "playlist"),
+                },
+            )
+            failed_videos.append(
+                {**video, "status": "no_transcript", "retry_count": retry_count}
+            )
             logger.warning("No transcript for %s (retry %d)", video_id, retry_count)
             continue
 
         # 9c. Summarize
         time.sleep(1)  # Rate limiting between API calls
         summary_data = summarize_transcript(
-            transcript_text, video["title"],
-            config.openrouter_api_key, config.llm_model,
+            transcript_text,
+            video["title"],
+            config.openrouter_api_key,
+            config.llm_model,
         )
 
         if not summary_data:
@@ -133,30 +150,36 @@ def run_pipeline(config: Config, pool):
             continue
 
         # 9d. Save to DB (summary field stores briefing for backwards compat)
-        upsert_video(pool, {
-            "video_id": video_id,
-            "title": video["title"],
-            "channel_title": video.get("channel_title"),
-            "published_at": video.get("published_at") or None,
-            "url": video.get("url"),
-            "status": "ok",
-            "processed_at": datetime.now(timezone.utc).isoformat(),
-            "summary": summary_data["briefing"],
-            "key_ideas": summary_data["key_insights"],
-            "category": summary_data["category"],
-            "transcript_language": lang,
-        })
+        upsert_video(
+            pool,
+            {
+                "video_id": video_id,
+                "title": video["title"],
+                "channel_title": video.get("channel_title"),
+                "published_at": video.get("published_at") or None,
+                "url": video.get("url"),
+                "status": "ok",
+                "processed_at": datetime.now(timezone.utc).isoformat(),
+                "summary": summary_data["briefing"],
+                "key_ideas": summary_data["key_insights"],
+                "category": summary_data["category"],
+                "transcript_language": lang,
+                "source": video.get("source", "playlist"),
+            },
+        )
 
-        videos_with_summaries.append({
-            **video,
-            "headline": summary_data.get("headline", ""),
-            "tldr": summary_data.get("tldr", ""),
-            "briefing": summary_data["briefing"],
-            "key_insights": summary_data["key_insights"],
-            "category": summary_data["category"],
-            "analysis": summary_data.get("analysis", {}),
-            "infographic": summary_data.get("infographic", {}),
-        })
+        videos_with_summaries.append(
+            {
+                **video,
+                "headline": summary_data.get("headline", ""),
+                "tldr": summary_data.get("tldr", ""),
+                "briefing": summary_data["briefing"],
+                "key_insights": summary_data["key_insights"],
+                "category": summary_data["category"],
+                "analysis": summary_data.get("analysis", {}),
+                "infographic": summary_data.get("infographic", {}),
+            }
+        )
         logger.info("Successfully processed: %s", video["title"])
 
     # 10. Check if there's anything to report
@@ -174,26 +197,35 @@ def run_pipeline(config: Config, pool):
     # 13. Send via Telegram
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     caption = f"VIS Daily Report — {now} — {len(videos_with_summaries)} videos"
-    telegram_sent = send_pdf(config.telegram_bot_token, config.telegram_chat_id, pdf_path, caption)
+    telegram_sent = send_pdf(
+        config.telegram_bot_token, config.telegram_chat_id, pdf_path, caption
+    )
 
     # 14. Log run
-    log_run(pool, {
-        "videos_found": len(new_videos),
-        "videos_processed": len(videos_with_summaries),
-        "videos_skipped": len(failed_videos),
-        "report_path": pdf_path,
-        "success": True,
-        "telegram_sent": telegram_sent,
-    })
+    log_run(
+        pool,
+        {
+            "videos_found": len(new_videos),
+            "videos_processed": len(videos_with_summaries),
+            "videos_skipped": len(failed_videos),
+            "report_path": pdf_path,
+            "success": True,
+            "telegram_sent": telegram_sent,
+        },
+    )
 
     # 15. If Telegram failed, send error message
     if not telegram_sent:
         error_msg = f"VIS: PDF delivery failed. Report saved locally at {pdf_path}."
-        send_error_message(config.telegram_bot_token, config.telegram_chat_id, error_msg)
+        send_error_message(
+            config.telegram_bot_token, config.telegram_chat_id, error_msg
+        )
 
     logger.info(
         "Pipeline complete: %d processed, %d failed, telegram=%s",
-        len(videos_with_summaries), len(failed_videos), telegram_sent,
+        len(videos_with_summaries),
+        len(failed_videos),
+        telegram_sent,
     )
 
 
@@ -211,6 +243,7 @@ def run():
     try:
         # Start bot polling for commands
         from .bot import VISBot
+
         bot = VISBot(config.telegram_bot_token, config.telegram_chat_id, pool, config)
         bot.set_run_callback(lambda: run_pipeline(config, pool))
         bot.start_polling()
@@ -220,10 +253,13 @@ def run():
 
     except Exception as e:
         logger.error("Pipeline failed: %s", e, exc_info=True)
-        log_run(pool, {
-            "success": False,
-            "error_message": str(e),
-        })
+        log_run(
+            pool,
+            {
+                "success": False,
+                "error_message": str(e),
+            },
+        )
         sys.exit(1)
     finally:
         # 16. Close DB pool

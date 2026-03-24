@@ -2,7 +2,7 @@
 
 ## What It Does
 
-Monitors a YouTube playlist, fetches transcripts, summarizes them via LLM (OpenRouter), generates PDF reports, and delivers via Telegram. Runs as a long-lived service: Telegram bot for commands + APScheduler for daily cron.
+Monitors a YouTube playlist and specific YouTube channels, fetches transcripts, summarizes them via LLM (OpenRouter), generates PDF reports, and delivers via Telegram. Runs as a long-lived service: Telegram bot for commands + APScheduler for daily cron.
 
 ## Architecture
 
@@ -11,13 +11,13 @@ src/vis/
   __init__.py    → Package marker
   config.py      → Load .env, validate, expose Config dataclass
   db.py          → PostgreSQL pool + schema + queries (psycopg2)
-  youtube.py     → Playlist fetch via yt-dlp (no API key needed)
+  youtube.py     → Playlist + channel fetch via yt-dlp (no API key needed)
   transcript.py  → 3-layer extraction: youtube-transcript-api → yt-dlp → Supadata
   summarize.py   → LLM summarization via OpenRouter (JSON output)
   report.py      → Markdown report generation (uses headline, briefing, analysis fields)
   pdf.py         → HTML/PDF conversion via Playwright (dark-theme, cover + TOC + content)
   telegram.py    → Send PDF via Telegram Bot API
-  bot.py         → Telegram bot commands (/status, /check, /run, /stats, /pending)
+  bot.py         → Telegram bot commands (/status, /check, /run, /stats, /pending, /addchannel, /rmchannel, /channels)
   main.py        → Pipeline orchestrator + cleanup
   scheduler.py   → APScheduler + bot polling (long-lived process)
 ```
@@ -42,6 +42,9 @@ src/vis/
 - `/run` — Trigger pipeline run manually
 - `/pending` — List videos waiting for transcript retry
 - `/info` — System configuration and version info
+- `/addchannel <@handle or URL>` — Add a YouTube channel to monitor
+- `/rmchannel <id or name>` — Remove a monitored channel
+- `/channels` — List monitored channels
 
 ## Commands
 

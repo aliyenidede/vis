@@ -50,7 +50,9 @@ You MUST respond with valid JSON only, no markdown, no extra text. Use this exac
 }"""
 
 
-def summarize_transcript(transcript: str, video_title: str, api_key: str, model: str) -> dict | None:
+def summarize_transcript(
+    transcript: str, video_title: str, api_key: str, model: str
+) -> dict | None:
     user_prompt = f"Video title: {video_title}\n\nTranscript:\n{transcript}"
 
     messages = [
@@ -65,7 +67,9 @@ def summarize_transcript(transcript: str, video_title: str, api_key: str, model:
     return _parse_llm_response(raw)
 
 
-def _call_openrouter(messages: list, api_key: str, model: str, retries: int = 3) -> str | None:
+def _call_openrouter(
+    messages: list, api_key: str, model: str, retries: int = 3
+) -> str | None:
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -79,23 +83,37 @@ def _call_openrouter(messages: list, api_key: str, model: str, retries: int = 3)
 
     for attempt in range(retries):
         try:
-            response = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=60)
+            response = requests.post(
+                OPENROUTER_URL, headers=headers, json=payload, timeout=60
+            )
 
             if response.status_code == 200:
                 data = response.json()
-                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                content = (
+                    data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                )
                 return content
 
             if response.status_code == 429:
-                retry_after = int(response.headers.get("retry-after", 5 * (2 ** attempt)))
-                logger.warning("Rate limited (429), waiting %ds (attempt %d/%d)", retry_after, attempt + 1, retries)
+                retry_after = int(response.headers.get("retry-after", 5 * (2**attempt)))
+                logger.warning(
+                    "Rate limited (429), waiting %ds (attempt %d/%d)",
+                    retry_after,
+                    attempt + 1,
+                    retries,
+                )
                 time.sleep(retry_after)
                 continue
 
             if response.status_code >= 500:
                 wait = 2 * (attempt + 1)
-                logger.warning("Server error %d, retrying in %ds (attempt %d/%d)",
-                               response.status_code, wait, attempt + 1, retries)
+                logger.warning(
+                    "Server error %d, retrying in %ds (attempt %d/%d)",
+                    response.status_code,
+                    wait,
+                    attempt + 1,
+                    retries,
+                )
                 time.sleep(wait)
                 continue
 
@@ -115,6 +133,7 @@ def _call_openrouter(messages: list, api_key: str, model: str, retries: int = 3)
 def _strip_thinking(raw: str) -> str:
     """Strip <think>...</think> blocks from reasoning model output."""
     import re
+
     return re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
 
 
@@ -131,6 +150,7 @@ def _parse_llm_response(raw: str) -> dict | None:
 
     # Strategy 2: extract from markdown code block
     import re
+
     match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL)
     if match:
         try:
@@ -145,7 +165,7 @@ def _parse_llm_response(raw: str) -> dict | None:
     last_brace = raw.rfind("}")
     if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
         try:
-            result = json.loads(raw[first_brace:last_brace + 1])
+            result = json.loads(raw[first_brace : last_brace + 1])
             if _validate_result(result):
                 return result
         except json.JSONDecodeError:

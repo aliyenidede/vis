@@ -4,8 +4,13 @@ import pytest
 from vis.report import generate_report
 
 
-def _make_video(title="Test Video", channel="Test Channel", briefing="Briefing text",
-                key_insights=None, category="Tutorial"):
+def _make_video(
+    title="Test Video",
+    channel="Test Channel",
+    briefing="Briefing text",
+    key_insights=None,
+    category="Tutorial",
+):
     return {
         "video_id": "abc123",
         "title": title,
