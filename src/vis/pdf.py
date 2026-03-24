@@ -73,7 +73,8 @@ def _generate_html(videos, failed_videos, date_str, processed, failed):
     toc_items = ""
 
     for i, v in enumerate(videos, 1):
-        toc_items += f'<div class="toc-item"><span class="toc-num">{i:02d}</span><span class="toc-title">{v["title"]}</span></div>\n'
+        headline = v.get("headline", v["title"])
+        toc_items += f'<div class="toc-item"><span class="toc-num">{i:02d}</span><span class="toc-title">{headline}</span></div>\n'
 
         # Infographic
         infographic_html = ""
@@ -106,10 +107,10 @@ def _generate_html(videos, failed_videos, date_str, processed, failed):
                 <div class="infographic-bottom">{bottom}</div>
             </div>'''
 
-        # Key ideas
-        ideas_html = ""
-        for idea in v.get("key_ideas", []):
-            ideas_html += f'<li><span class="bullet-icon">&rsaquo;</span> {idea}</li>'
+        # Key insights
+        insights_html = ""
+        for insight in v.get("key_insights", v.get("key_ideas", [])):
+            insights_html += f'<li><span class="bullet-icon">&rsaquo;</span> {insight}</li>'
 
         # TL;DR
         tldr_html = ""
@@ -120,13 +121,53 @@ def _generate_html(videos, failed_videos, date_str, processed, failed):
                 <p>{v["tldr"]}</p>
             </div>'''
 
-        # Summary paragraphs
-        summary_paras = ""
-        for para in v.get("summary", "").split("\n\n"):
+        # Briefing paragraphs
+        briefing_text = v.get("briefing", v.get("summary", ""))
+        briefing_paras = ""
+        for para in briefing_text.split("\n\n"):
             if para.strip():
-                summary_paras += f"<p>{para.strip()}</p>"
-        if not summary_paras:
-            summary_paras = f"<p>{v.get('summary', 'No summary available.')}</p>"
+                briefing_paras += f"<p>{para.strip()}</p>"
+        if not briefing_paras:
+            briefing_paras = f"<p>{briefing_text or 'No briefing available.'}</p>"
+
+        # Analysis section
+        analysis_html = ""
+        analysis = v.get("analysis", {})
+        if analysis and (analysis.get("why_it_matters") or analysis.get("critical_perspective") or analysis.get("open_questions")):
+            why_html = ""
+            if analysis.get("why_it_matters"):
+                why_html = f'''
+                <div class="analysis-block">
+                    <div class="analysis-label">Why It Matters</div>
+                    <p>{analysis["why_it_matters"]}</p>
+                </div>'''
+
+            critical_html = ""
+            if analysis.get("critical_perspective"):
+                critical_html = f'''
+                <div class="analysis-block">
+                    <div class="analysis-label">Critical Perspective</div>
+                    <p>{analysis["critical_perspective"]}</p>
+                </div>'''
+
+            questions_html = ""
+            if analysis.get("open_questions"):
+                q_items = ""
+                for q in analysis["open_questions"]:
+                    q_items += f'<li>{q}</li>'
+                questions_html = f'''
+                <div class="analysis-block">
+                    <div class="analysis-label">Open Questions</div>
+                    <ul class="open-questions">{q_items}</ul>
+                </div>'''
+
+            analysis_html = f'''
+            <div class="analysis-section">
+                <h3>Analysis</h3>
+                {why_html}
+                {critical_html}
+                {questions_html}
+            </div>'''
 
         # YouTube link
         video_id = v.get("video_id", "")
@@ -138,10 +179,10 @@ def _generate_html(videos, failed_videos, date_str, processed, failed):
         <div class="video-page">
             <div class="video-header">
                 <div class="video-num">{i:02d}</div>
-                <h2>{v["title"]}</h2>
+                <h2>{headline}</h2>
             </div>
             <div class="video-meta">
-                <span class="meta-tag"><span class="meta-icon">&#9654;</span> {v.get("channel_title", "Unknown")}</span>
+                <span class="meta-tag source-tag"><span class="meta-icon">&#9654;</span> {v.get("channel_title", "Unknown")} — {v["title"]}</span>
                 <span class="meta-tag"><span class="meta-icon">&#9670;</span> {v.get("category", "Other")}</span>
                 {yt_link}
             </div>
@@ -149,14 +190,16 @@ def _generate_html(videos, failed_videos, date_str, processed, failed):
             {tldr_html}
 
             <div class="section">
-                <h3>Summary</h3>
-                {summary_paras}
+                <h3>Briefing</h3>
+                {briefing_paras}
             </div>
 
             <div class="section">
-                <h3>Key Ideas & Takeaways</h3>
-                <ul class="key-ideas">{ideas_html}</ul>
+                <h3>Key Insights</h3>
+                <ul class="key-ideas">{insights_html}</ul>
             </div>
+
+            {analysis_html}
 
             {infographic_html}
         </div>
@@ -534,6 +577,70 @@ def _generate_html(videos, failed_videos, date_str, processed, failed):
         font-weight: 700;
         font-size: 30pt;
         margin-right: 8px;
+    }}
+
+    /* ============ ANALYSIS SECTION ============ */
+    .analysis-section {{
+        margin-top: 24px;
+        margin-bottom: 24px;
+    }}
+
+    .analysis-section h3 {{
+        font-size: 28pt;
+        font-weight: 700;
+        color: #a855f7;
+        margin-bottom: 16px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }}
+
+    .analysis-block {{
+        background: rgba(168, 85, 247, 0.04);
+        border-left: 3px solid rgba(168, 85, 247, 0.3);
+        border-radius: 0 8px 8px 0;
+        padding: 14px 20px;
+        margin-bottom: 14px;
+    }}
+
+    .analysis-label {{
+        font-size: 20pt;
+        font-weight: 700;
+        color: #ec4899;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        margin-bottom: 6px;
+    }}
+
+    .analysis-block p {{
+        color: #d1d5db;
+        font-size: 24pt;
+        line-height: 1.7;
+    }}
+
+    .open-questions {{
+        list-style: none;
+        padding: 0;
+    }}
+
+    .open-questions li {{
+        color: #d1d5db;
+        font-size: 24pt;
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        line-height: 1.5;
+    }}
+
+    .open-questions li::before {{
+        content: "?";
+        color: #ec4899;
+        font-weight: 700;
+        font-size: 28pt;
+        margin-right: 10px;
+    }}
+
+    .source-tag {{
+        font-size: 18pt;
+        color: #6b7280;
     }}
 
     /* ============ INFOGRAPHIC ============ */

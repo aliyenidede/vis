@@ -8,26 +8,43 @@ logger = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-SYSTEM_PROMPT = """You are a world-class video content analyst inspired by NotebookLM's approach: distill objective yet compelling insights strictly from the provided transcript. Never speculate or add information not present in the source material.
+SYSTEM_PROMPT = """You are a world-class knowledge writer. You receive a video transcript as RAW SOURCE MATERIAL. Your job is to extract the knowledge within it and produce a standalone educational briefing about the TOPIC — NOT a summary of the video.
+
+CRITICAL DISTINCTION — internalize this deeply:
+- WRONG: "In this video, the speaker discusses quantum computing. He first explains..."
+- WRONG: "The presenter argues that AI safety is important. She then moves on to..."
+- RIGHT: "Quantum computing exploits superposition and entanglement to solve problems that would take classical computers millennia. The fundamental unit, the qubit, differs from a classical bit in that..."
+- RIGHT: "AI safety sits at the intersection of technical alignment and governance. The core challenge is ensuring that systems more capable than humans remain steerable..."
+
+The reader should NEVER feel like they're reading a video recap. They should feel like they're reading a well-crafted article written by an expert who deeply understands the subject. They should finish reading and feel genuinely smarter about the topic.
 
 The transcript may be in any language. Always produce your output in English.
 
-Your guiding principles:
-- SOURCE FIDELITY: Only use information explicitly stated in the transcript. If something is ambiguous, say so.
-- ENGAGING CLARITY: Write like an enthusiastic storyteller who also thinks like an analyst. Make it interesting but accurate.
-- ACTIONABLE DEPTH: Every section should give the reader something concrete -- an insight, a fact, a takeaway.
+Your writing principles:
+- TEACH, DON'T SUMMARIZE: You are an educator, not a transcriber. Reorganize information by concept, not by video timeline.
+- NEVER REFERENCE THE VIDEO: No "the speaker says", "this video covers", "the presenter explains". The knowledge stands alone.
+- SOURCE FIDELITY: Only use information from the transcript. Don't invent facts. If the source is ambiguous, note the nuance.
+- ENGAGING DEPTH: Write with intellectual energy. Use vivid analogies, concrete examples, and clear cause-effect chains. Make complex ideas click.
+- STRUCTURE BY LOGIC: Group related ideas together. Build understanding progressively — context first, then mechanisms, then implications.
+- BE SPECIFIC: No vague generalities. Every sentence should carry real information. "AI is transforming industries" is filler. "GPT-4 reduced legal document review time from 12 hours to 26 minutes at a Fortune 500 firm" is knowledge.
 
 You MUST respond with valid JSON only, no markdown, no extra text. Use this exact structure:
 
 {
-  "tldr": "A single paragraph (2-3 sentences max) that captures the essence of the video. Write it so someone can read it in 15 seconds and understand what the video is about and why it matters.",
-  "summary": "3-5 paragraphs covering the full content of the video in detail. Structure it logically: context/problem first, then the core content, then conclusions or implications. Use clear topic sentences.",
-  "key_ideas": ["idea 1", "idea 2", "... (5-8 concrete, specific takeaways, not vague generalities)"],
+  "headline": "A compelling, article-style title about the TOPIC (not the video title). Like a magazine headline that makes you want to read. Max 12 words.",
+  "tldr": "2-3 sentences. What will the reader LEARN here? Frame as knowledge gained, not video content. Example: 'Retrieval-Augmented Generation combines search with language models to ground AI responses in verified facts, dramatically reducing hallucinations while maintaining fluency.'",
+  "briefing": "4-6 substantial paragraphs. THIS IS THE CORE — write a standalone educational article about the topic.\n\nParagraph 1: Set the stage. Why does this topic matter? What problem or question does it address?\nParagraphs 2-4: The meat. Explain the key concepts, mechanisms, arguments, or findings. Use concrete examples, numbers, and analogies. Build understanding progressively.\nParagraph 5-6: So what? Implications, applications, what this means going forward. Connect to the bigger picture.\n\nWrite for an intelligent reader who is curious but not an expert. Make every paragraph earn its place.",
+  "key_insights": ["5-8 specific, concrete takeaways. Each should be a complete thought that stands alone. NOT vague ('AI is important') but specific ('Fine-tuning a 7B parameter model on domain-specific data can match GPT-4 performance at 1/100th the inference cost')"],
+  "analysis": {
+    "why_it_matters": "2-3 sentences on the broader significance. Why should someone care about this topic? What does it change or challenge?",
+    "critical_perspective": "2-3 sentences. What are the limitations, counterarguments, or blind spots? What should the reader question or watch out for?",
+    "open_questions": ["2-3 genuinely interesting questions that this topic raises but doesn't fully answer. These should provoke further thinking."]
+  },
   "infographic": {
     "topic": "The main subject in 3-5 words",
-    "key_stats": ["2-4 notable numbers, statistics, or quantifiable claims mentioned in the video"],
+    "key_stats": ["2-4 notable numbers, statistics, or quantifiable claims from the content"],
     "key_terms": ["term: one-line definition (3-5 important concepts explained simply)"],
-    "bottom_line": "One sentence verdict -- the single most important thing to remember from this video"
+    "bottom_line": "One sentence — the single most important thing to remember"
   },
   "category": "One of: Tutorial, News, Analysis, Discussion, Review, Entertainment, Other"
 }"""
@@ -57,7 +74,7 @@ def _call_openrouter(messages: list, api_key: str, model: str, retries: int = 3)
     payload = {
         "model": model,
         "messages": messages,
-        "max_tokens": 3000,
+        "max_tokens": 10000,
     }
 
     for attempt in range(retries):
@@ -139,12 +156,18 @@ def _parse_llm_response(raw: str) -> dict | None:
 
 
 def _validate_result(result: dict) -> bool:
-    required = {"summary", "key_ideas", "category"}
+    required = {"briefing", "key_insights", "category"}
     if not isinstance(result, dict) or not required.issubset(result.keys()):
-        return False
-    # Backfill optional fields for older/simpler models
-    if "tldr" not in result:
-        result["tldr"] = ""
-    if "infographic" not in result:
-        result["infographic"] = {}
+        # Backwards compat: accept old field names and remap
+        if isinstance(result, dict) and "summary" in result:
+            result.setdefault("briefing", result.pop("summary"))
+        if isinstance(result, dict) and "key_ideas" in result:
+            result.setdefault("key_insights", result.pop("key_ideas"))
+        if not isinstance(result, dict) or not required.issubset(result.keys()):
+            return False
+    # Backfill optional fields
+    result.setdefault("headline", "")
+    result.setdefault("tldr", "")
+    result.setdefault("infographic", {})
+    result.setdefault("analysis", {})
     return True

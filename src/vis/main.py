@@ -132,7 +132,7 @@ def run_pipeline(config: Config, pool):
             logger.warning("Summarization failed for %s, will retry next run", video_id)
             continue
 
-        # 9d. Save to DB
+        # 9d. Save to DB (summary field stores briefing for backwards compat)
         upsert_video(pool, {
             "video_id": video_id,
             "title": video["title"],
@@ -141,17 +141,21 @@ def run_pipeline(config: Config, pool):
             "url": video.get("url"),
             "status": "ok",
             "processed_at": datetime.now(timezone.utc).isoformat(),
-            "summary": summary_data["summary"],
-            "key_ideas": summary_data["key_ideas"],
+            "summary": summary_data["briefing"],
+            "key_ideas": summary_data["key_insights"],
             "category": summary_data["category"],
             "transcript_language": lang,
         })
 
         videos_with_summaries.append({
             **video,
-            "summary": summary_data["summary"],
-            "key_ideas": summary_data["key_ideas"],
+            "headline": summary_data.get("headline", ""),
+            "tldr": summary_data.get("tldr", ""),
+            "briefing": summary_data["briefing"],
+            "key_insights": summary_data["key_insights"],
             "category": summary_data["category"],
+            "analysis": summary_data.get("analysis", {}),
+            "infographic": summary_data.get("infographic", {}),
         })
         logger.info("Successfully processed: %s", video["title"])
 

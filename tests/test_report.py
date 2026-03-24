@@ -4,17 +4,23 @@ import pytest
 from vis.report import generate_report
 
 
-def _make_video(title="Test Video", channel="Test Channel", summary="Summary text",
-                key_ideas=None, category="Tutorial"):
+def _make_video(title="Test Video", channel="Test Channel", briefing="Briefing text",
+                key_insights=None, category="Tutorial"):
     return {
         "video_id": "abc123",
         "title": title,
         "channel_title": channel,
         "published_at": "2026-01-01",
         "url": "https://youtube.com/watch?v=abc123",
-        "summary": summary,
-        "key_ideas": key_ideas or ["idea 1", "idea 2"],
+        "headline": "Test Headline",
+        "briefing": briefing,
+        "key_insights": key_insights or ["insight 1", "insight 2"],
         "category": category,
+        "analysis": {
+            "why_it_matters": "This matters because...",
+            "critical_perspective": "However, consider that...",
+            "open_questions": ["What about X?"],
+        },
     }
 
 
@@ -67,8 +73,8 @@ def test_special_characters_in_title():
         assert "C++ & Python" in content
 
 
-def test_empty_key_ideas():
+def test_empty_key_insights():
     with tempfile.TemporaryDirectory() as tmpdir:
-        videos = [_make_video(key_ideas=[])]
+        videos = [_make_video(key_insights=[])]
         path = generate_report(videos, [], tmpdir)
         assert os.path.exists(path)

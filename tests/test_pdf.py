@@ -12,9 +12,15 @@ SAMPLE_VIDEOS = [
         "published_at": "2026-01-01",
         "url": "https://youtube.com/watch?v=abc123",
         "category": "Tutorial",
-        "summary": "This is a test summary with multiple sentences. It covers the main topics discussed in the video.",
-        "key_ideas": ["First key idea", "Second key idea", "Third key idea"],
-        "tldr": "A quick overview of the video content.",
+        "headline": "Understanding Test Topics in Depth",
+        "briefing": "This is a test briefing with multiple sentences.\n\nIt covers the main topics in educational depth.",
+        "key_insights": ["First key insight", "Second key insight", "Third key insight"],
+        "tldr": "A quick overview of what you'll learn about test topics.",
+        "analysis": {
+            "why_it_matters": "This matters because testing is fundamental.",
+            "critical_perspective": "However, not all testing approaches are equal.",
+            "open_questions": ["What about edge cases?", "How does this scale?"],
+        },
         "infographic": {
             "topic": "Test Topic",
             "key_stats": ["Stat 1", "Stat 2"],

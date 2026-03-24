@@ -26,27 +26,48 @@ def generate_report(
     lines.append("")
 
     for i, video in enumerate(videos_with_summaries, 1):
-        lines.append(f"## {i}. {video['title']}")
-        lines.append(f"**Channel:** {video.get('channel_title', 'Unknown')}")
+        headline = video.get("headline", video["title"])
+        lines.append(f"## {i}. {headline}")
+        lines.append(f"**Source:** {video.get('channel_title', 'Unknown')} — {video['title']}")
         lines.append(f"**Published:** {video.get('published_at', 'Unknown')}")
         lines.append(f"**Link:** {video.get('url', '')}")
         lines.append(f"**Category:** {video.get('category', 'Other')}")
         lines.append("")
 
-        # TL;DR — quick overview paragraph
+        # TL;DR
         tldr = video.get("tldr", "")
         if tldr:
             lines.append("### TL;DR")
             lines.append(tldr)
             lines.append("")
 
-        lines.append("### Summary")
-        lines.append(video.get("summary", "No summary available."))
+        # Briefing (main educational content)
+        lines.append("### Briefing")
+        lines.append(video.get("briefing", video.get("summary", "No briefing available.")))
         lines.append("")
-        lines.append("### Key Ideas & Takeaways")
-        for idea in video.get("key_ideas", []):
-            lines.append(f"- {idea}")
+
+        # Key Insights
+        lines.append("### Key Insights")
+        for insight in video.get("key_insights", video.get("key_ideas", [])):
+            lines.append(f"- {insight}")
         lines.append("")
+
+        # Analysis
+        analysis = video.get("analysis", {})
+        if analysis:
+            if analysis.get("why_it_matters"):
+                lines.append("### Why It Matters")
+                lines.append(analysis["why_it_matters"])
+                lines.append("")
+            if analysis.get("critical_perspective"):
+                lines.append("### Critical Perspective")
+                lines.append(analysis["critical_perspective"])
+                lines.append("")
+            if analysis.get("open_questions"):
+                lines.append("### Open Questions")
+                for q in analysis["open_questions"]:
+                    lines.append(f"- {q}")
+                lines.append("")
 
         # Infographic box
         infographic = video.get("infographic", {})
