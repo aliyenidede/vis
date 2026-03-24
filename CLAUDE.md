@@ -14,8 +14,8 @@ src/vis/
   youtube.py     → Playlist fetch via yt-dlp (no API key needed)
   transcript.py  → 3-layer extraction: youtube-transcript-api → yt-dlp → Supadata
   summarize.py   → LLM summarization via OpenRouter (JSON output)
-  report.py      → Markdown report generation
-  pdf.py         → PDF conversion with fpdf2 (cover page + TOC + content)
+  report.py      → Markdown report generation (uses headline, briefing, analysis fields)
+  pdf.py         → HTML/PDF conversion via Playwright (dark-theme, cover + TOC + content)
   telegram.py    → Send PDF via Telegram Bot API
   bot.py         → Telegram bot commands (/status, /check, /run, /stats, /pending)
   main.py        → Pipeline orchestrator + cleanup
