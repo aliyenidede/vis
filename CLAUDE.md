@@ -32,6 +32,8 @@ src/vis/
 - **Rate limiting**: 2s between transcript fetches, 1s between LLM calls
 - **Supadata API**: 100 credits/month, auto-checked before use (95 credit threshold)
 - **Report cleanup**: Old .md/.pdf files auto-deleted after 7 days
+- **Channel monitoring**: Channels stored in `monitored_channels` table (soft-delete via `active` flag). Videos from channels tagged with `source='channel:<input>'` in `processed_videos`. Only videos published after `added_at` are processed.
+- **Telegram Markdown**: Always wrap dynamic strings in backticks, use `parse_mode=None` for error messages
 
 ## Telegram Bot Commands
 
