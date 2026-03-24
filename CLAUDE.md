@@ -68,3 +68,17 @@ docker compose up --build
 - Coolify: connect GitHub repo, set env vars in UI
 - Daily pipeline: 08:00 Istanbul time via APScheduler
 - Telegram bot: always listening for commands
+
+## Workflow Behavior
+
+**Self-Improvement Loop** — After any correction from the user, append the lesson to `.rea/lessons.md`:
+```
+## YYYY-MM-DD
+**Mistake:** what went wrong
+**Rule:** what to do instead
+```
+If the lesson is architectural (e.g. a rule about what can import what, where logic must live), promote it to the relevant section of `CLAUDE.md` instead of lessons.md.
+
+**Verification Standard** — Before marking any task complete, ask: "Would a staff engineer approve this?" Run tests, check logs, prove it works.
+
+**Verification Iron Rule** — NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE. Before saying "done": run the command that proves it, read the full output, check exit code. "Should work" is not evidence.

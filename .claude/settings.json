@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "pytest*",
+      "ruff*",
+      "mypy*"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/post-tool-use.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

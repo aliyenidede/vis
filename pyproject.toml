@@ -3,6 +3,23 @@ name = "vis"
 version = "0.1.0"
 requires-python = ">=3.12"
 
+dependencies = [
+    "requests",
+    "psycopg2-binary",
+    "python-dotenv",
+    "yt-dlp",
+    "youtube-transcript-api",
+    "python-telegram-bot",
+    "apscheduler",
+    "playwright",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.4",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
